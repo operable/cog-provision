@@ -5,6 +5,7 @@ services:
     environment:
       - COG_MQTT_HOST=0.0.0.0
       - DATABASE_URL=${DATABASE_URL}
+      - COG_DB_SSL=${COG_DB_SSL}
       - SLACK_API_TOKEN=${SLACK_API_TOKEN}
       - COG_BOOTSTRAP_USERNAME=${COG_BOOTSTRAP_USERNAME}
       - COG_BOOTSTRAP_PASSWORD=${COG_BOOTSTRAP_PASSWORD}
@@ -39,7 +40,7 @@ services:
       - RELAY_COG_REFRESH_INTERVAL=30s
       - RELAY_DOCKER_CLEAN_INTERVAL=1m
       - RELAY_COG_HOST=cog
-      - RELAY_DYNAMIC_CONFIG_ROOT=/tmp/bundle_configs
+      - RELAY_MANAGED_DYNAMIC_CONFIG=true
     links:
       - cog
     restart: always

@@ -75,6 +75,15 @@
       "AllowedPattern": "ecto://[^:]+:[^@]+@[^/]+/.*",
       "ConstraintDescription": "must be a valid Cog database URL"
     },
+    "CogDbSsl": {
+      "Description": "Use SSL to connect to Postgres",
+      "Type": "String",
+      "AllowedValues": [
+        "false",
+        "true"
+      ],
+      "Default": "false"
+    },
     "RdsMasterUsername": {
       "Description": "Username for Postgres admin user",
       "Type": "String",
@@ -391,7 +400,8 @@
             "default": "Database Configuration: External (Skip for RDS)"
           },
           "Parameters": [
-            "DatabaseUrl"
+            "DatabaseUrl",
+            "CogDbSsl"
           ]
         },
         {
@@ -510,6 +520,9 @@
         },
         "DatabaseUrl": {
           "default": "Database URL"
+        },
+        "CogDbSsl": {
+          "default": "Use SSL"
         },
         "CogBootstrapInstance": {
           "default": "* Bootstrap Method"
@@ -871,7 +884,6 @@
                         "Ref": "SlackApiToken"
                       },
                       "\n",
-                      "DATABASE_URL=",
                       {
                         "Fn::If": [
                           "ProvisionRds",
@@ -879,6 +891,7 @@
                             "Fn::Join": [
                               "",
                               [
+                                "DATABASE_URL=",
                                 "ecto://",
                                 {
                                   "Ref": "RdsMasterUsername"
@@ -901,13 +914,26 @@
                                     "Endpoint.Port"
                                   ]
                                 },
-                                "/cog",
-                                "\n"
+                                "/cog"
                               ]
                             ]
                           },
                           {
-                            "Ref": "DatabaseUrl"
+                            "Fn::Join": [
+                              "",
+                              [
+                                "DATABASE_URL=",
+                                {
+                                  "Ref": "DatabaseUrl"
+                                },
+                                "\n",
+                                "COG_DB_SSL=",
+                                {
+                                  "Ref": "CogDbSsl"
+                                },
+                                "\n"
+                              ]
+                            ]
                           }
                         ]
                       },
@@ -1050,7 +1076,7 @@
                 "group": "root"
               },
               "/opt/cog/docker-compose.yml": {
-                "content": "version: \"2\"\nservices:\n  cog:\n    image: \"${COG_IMAGE}\"\n    environment:\n      - COG_MQTT_HOST=0.0.0.0\n      - DATABASE_URL=${DATABASE_URL}\n      - SLACK_API_TOKEN=${SLACK_API_TOKEN}\n      - COG_BOOTSTRAP_USERNAME=${COG_BOOTSTRAP_USERNAME}\n      - COG_BOOTSTRAP_PASSWORD=${COG_BOOTSTRAP_PASSWORD}\n      - COG_BOOTSTRAP_EMAIL_ADDRESS=${COG_BOOTSTRAP_EMAIL_ADDRESS}\n      - COG_BOOTSTRAP_FIRST_NAME=${COG_BOOTSTRAP_FIRST_NAME}\n      - COG_BOOTSTRAP_LAST_NAME=${COG_BOOTSTRAP_LAST_NAME}\n      - COG_API_URL_HOST=${COG_API_URL_HOST}\n      - COG_API_URL_PORT=${COG_API_URL_PORT}\n      - COG_TRIGGER_URL_BASE=${COG_TRIGGER_URL_BASE}\n      - COG_TRIGGER_URL_HOST=${COG_TRIGGER_URL_HOST}\n      - COG_TRIGGER_URL_PORT=${COG_TRIGGER_URL_PORT}\n      - COG_SERVICE_URL_BASE=${COG_SERVICE_URL_BASE}\n      - COG_SERVICE_URL_HOST=${COG_SERVICE_URL_HOST}\n      - COG_SERVICE_URL_PORT=${COG_SERVICE_URL_PORT}\n      - RELAY_ID=${RELAY_ID}\n      - RELAY_COG_TOKEN=${RELAY_COG_TOKEN}\n    ports:\n      - 1883:1883\n      - 4000:4000\n      - 4001:4001\n      - 4002:4002\n    restart: always\n    entrypoint: /home/operable/cog/scripts/docker-start\n  relay:\n    image: \"${RELAY_IMAGE}\"\n    privileged: true\n    volumes:\n      - /var/run/docker.sock:/var/run/docker.sock\n    environment:\n      - RELAY_ID=${RELAY_ID}\n      - RELAY_COG_TOKEN=${RELAY_COG_TOKEN}\n      - RELAY_COG_REFRESH_INTERVAL=30s\n      - RELAY_DOCKER_CLEAN_INTERVAL=1m\n      - RELAY_COG_HOST=cog\n      - RELAY_DYNAMIC_CONFIG_ROOT=/tmp/bundle_configs\n    links:\n      - cog\n    restart: always\n    entrypoint: /usr/local/bin/relay\n",
+                "content": "version: \"2\"\nservices:\n  cog:\n    image: \"${COG_IMAGE}\"\n    environment:\n      - COG_MQTT_HOST=0.0.0.0\n      - DATABASE_URL=${DATABASE_URL}\n      - COG_DB_SSL=${COG_DB_SSL}\n      - SLACK_API_TOKEN=${SLACK_API_TOKEN}\n      - COG_BOOTSTRAP_USERNAME=${COG_BOOTSTRAP_USERNAME}\n      - COG_BOOTSTRAP_PASSWORD=${COG_BOOTSTRAP_PASSWORD}\n      - COG_BOOTSTRAP_EMAIL_ADDRESS=${COG_BOOTSTRAP_EMAIL_ADDRESS}\n      - COG_BOOTSTRAP_FIRST_NAME=${COG_BOOTSTRAP_FIRST_NAME}\n      - COG_BOOTSTRAP_LAST_NAME=${COG_BOOTSTRAP_LAST_NAME}\n      - COG_API_URL_HOST=${COG_API_URL_HOST}\n      - COG_API_URL_PORT=${COG_API_URL_PORT}\n      - COG_TRIGGER_URL_BASE=${COG_TRIGGER_URL_BASE}\n      - COG_TRIGGER_URL_HOST=${COG_TRIGGER_URL_HOST}\n      - COG_TRIGGER_URL_PORT=${COG_TRIGGER_URL_PORT}\n      - COG_SERVICE_URL_BASE=${COG_SERVICE_URL_BASE}\n      - COG_SERVICE_URL_HOST=${COG_SERVICE_URL_HOST}\n      - COG_SERVICE_URL_PORT=${COG_SERVICE_URL_PORT}\n      - RELAY_ID=${RELAY_ID}\n      - RELAY_COG_TOKEN=${RELAY_COG_TOKEN}\n    ports:\n      - 1883:1883\n      - 4000:4000\n      - 4001:4001\n      - 4002:4002\n    restart: always\n    entrypoint: /home/operable/cog/scripts/docker-start\n  relay:\n    image: \"${RELAY_IMAGE}\"\n    privileged: true\n    volumes:\n      - /var/run/docker.sock:/var/run/docker.sock\n    environment:\n      - RELAY_ID=${RELAY_ID}\n      - RELAY_COG_TOKEN=${RELAY_COG_TOKEN}\n      - RELAY_COG_REFRESH_INTERVAL=30s\n      - RELAY_DOCKER_CLEAN_INTERVAL=1m\n      - RELAY_COG_HOST=cog\n      - RELAY_MANAGED_DYNAMIC_CONFIG=true\n    links:\n      - cog\n    restart: always\n    entrypoint: /usr/local/bin/relay\n",
                 "mode": "0600",
                 "owner": "root",
                 "group": "root"

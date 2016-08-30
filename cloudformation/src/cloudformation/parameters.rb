@@ -90,6 +90,12 @@ parameter "DatabaseUrl",
   :AllowedPattern => "ecto://[^:]+:[^@]+@[^/]+/.*",
   :ConstraintDescription => "must be a valid Cog database URL"
 
+parameter "CogDbSsl",
+  :Description => "Use SSL to connect to Postgres",
+  :Type => "String",
+  :AllowedValues => %w(false true),
+  :Default => "false"
+
 ##
 # Cog Database (RDS)
 #
@@ -242,6 +248,7 @@ cog_labels = {
   "RelayCogToken" => { "default" => "* Relay Secret" },
   "DatabaseSource" => { "default" => "* Database Source" },
   "DatabaseUrl" => { "default" => "Database URL" },
+  "CogDbSsl" => { "default" => "Use SSL" },
   "CogBootstrapInstance" => { "default" => "* Bootstrap Method" },
   "CogAllowSelfRegistration" => { "default" => "* Self Registration" }
 }
@@ -271,7 +278,7 @@ metadata "AWS::CloudFormation::Interface",
     },
     {
       :Label => { "default" => "Database Configuration: External (Skip for RDS)" },
-      :Parameters => %w(DatabaseUrl)
+      :Parameters => %w(DatabaseUrl CogDbSsl)
     },
     {
       :Label => { "default" => "Database Configuration: RDS (Skip for External)" },
