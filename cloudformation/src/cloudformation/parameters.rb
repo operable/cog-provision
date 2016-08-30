@@ -87,7 +87,7 @@ condition "ProvisionRds", equal(ref("DatabaseSource"), "RDS")
 parameter "DatabaseUrl",
   :Description => "Database connection string for external database",
   :Type => "String",
-  :AllowedPattern => "ecto://[^:]+:[^@]+@[^/]+/.*",
+  :AllowedPattern => "^(ecto://[^:]+:[^@]+@[^/]+/.*)?$",
   :ConstraintDescription => "must be a valid Cog database URL"
 
 parameter "CogDbSsl",
