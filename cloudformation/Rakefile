@@ -1,0 +1,19 @@
+
+require 'bundler/setup'
+
+require_relative 'lib/cog'
+require_relative 'lib/cog/cfn'
+
+namespace :cfn do
+  task :generate do
+    cfn = Cog::Cfn.new
+    puts cfn.generate
+  end
+
+  task :write, [ :path ] do |task, args|
+    cfn = Cog::Cfn.new
+    printf("Writing Cloudformation template to %s ... ", args[:path])
+    cfn.write(args[:path])
+    puts "done."
+  end
+end

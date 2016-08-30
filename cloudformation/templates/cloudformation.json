@@ -1,0 +1,1230 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Cog ChatOps Platform",
+  "Parameters": {
+    "VpcId": {
+      "Description": "VPC ID for Cog deployment",
+      "Type": "AWS::EC2::VPC::Id",
+      "Default": "",
+      "ConstraintDescription": "must be an existing VPC"
+    },
+    "KeyName": {
+      "Description": "Name of an existing EC2 KeyPair to enable SSH access",
+      "Type": "AWS::EC2::KeyPair::KeyName",
+      "ConstraintDescription": "must be the name of an existing EC2 KeyPair"
+    },
+    "InstanceType": {
+      "Description": "Cog Host EC2 instance type",
+      "Type": "String",
+      "Default": "t2.medium",
+      "ConstraintDescription": "must be an HVM/EBS EC2 instance type"
+    },
+    "ImageId": {
+      "Description": "Cog Host AMI",
+      "Type": "String",
+      "Default": "ami-81365496",
+      "ConstraintDescription": "must be an Ubuntu 16.04 LTS HVM/EBS AMI"
+    },
+    "SubnetIds": {
+      "Description": "Comma separated list of subnets - 2 or more required for MultiAZ RDS",
+      "Type": "List<AWS::EC2::Subnet::Id>",
+      "Default": "",
+      "ConstraintDescription": "must be a list of VPC subnet IDs"
+    },
+    "CogImage": {
+      "MinLength": "1",
+      "Description": "COG_IMAGE: Cog Docker Image",
+      "Type": "String",
+      "Default": "operable/cog:0.13"
+    },
+    "SlackApiToken": {
+      "NoEcho": "true",
+      "Description": "SLACK_API_TOKEN: Slack API token",
+      "Type": "String",
+      "Default": ""
+    },
+    "RelayImage": {
+      "MinLength": "1",
+      "Description": "RELAY_IMAGE: Relay Docker Image",
+      "Type": "String",
+      "Default": "operable/relay:0.13"
+    },
+    "RelayId": {
+      "Description": "RELAY_ID: UUID for Relay",
+      "Type": "String",
+      "Default": "00000000-0000-0000-0000-000000000000"
+    },
+    "RelayCogToken": {
+      "NoEcho": "true",
+      "Description": "RELAY_COG_TOKEN: Shared secret for Relay",
+      "Type": "String",
+      "Default": ""
+    },
+    "DatabaseSource": {
+      "Description": "Provision new RDS database or use existing external Postgres database",
+      "Type": "String",
+      "AllowedValues": [
+        "RDS",
+        "External Database"
+      ],
+      "Default": "RDS"
+    },
+    "DatabaseUrl": {
+      "Description": "Database connection string for external database",
+      "Type": "String",
+      "AllowedPattern": "ecto://[^:]+:[^@]+@[^/]+/.*",
+      "ConstraintDescription": "must be a valid Cog database URL"
+    },
+    "RdsMasterUsername": {
+      "Description": "Username for Postgres admin user",
+      "Type": "String",
+      "Default": "cog"
+    },
+    "RdsMasterPassword": {
+      "Description": "Password for Postgres admin user",
+      "Type": "String",
+      "NoEcho": "true"
+    },
+    "RdsInstanceType": {
+      "Description": "Instance type to use for RDS database",
+      "Type": "String",
+      "Default": "db.m3.medium"
+    },
+    "RdsStorage": {
+      "Description": "Space in GB to allocate for database storage",
+      "Type": "Number",
+      "Default": "20"
+    },
+    "RdsBackupRetention": {
+      "Description": "Number of days to retain automatic RDS backups",
+      "Type": "Number",
+      "Default": "30"
+    },
+    "RdsMultiAZ": {
+      "Description": "Configure multi-AZ failover HA - requires 2 or more subnet IDs to be defined",
+      "Type": "String",
+      "AllowedValues": [
+        "false",
+        "true"
+      ],
+      "Default": "false"
+    },
+    "CogBootstrapInstance": {
+      "Description": "Configure Cog admin user automatically with bootstrap settings or manually via cogctl",
+      "Type": "String",
+      "Default": "automatic",
+      "AllowedValues": [
+        "automatic",
+        "cogctl"
+      ]
+    },
+    "CogBootstrapUsername": {
+      "Description": "COG_BOOTSTRAP_USERNAME: Username for initial Cog administrator",
+      "Type": "String",
+      "Default": "admin"
+    },
+    "CogBootstrapPassword": {
+      "Description": "COG_BOOTSTRAP_PASSWORD: Password for initial Cog administrator",
+      "Type": "String",
+      "Default": "changeme"
+    },
+    "CogBootstrapFirstName": {
+      "Description": "COG_BOOTSTRAP_FIRST_NAME: First name for initial Cog administrator",
+      "Type": "String",
+      "Default": "Cog"
+    },
+    "CogBootstrapLastName": {
+      "Description": "COG_BOOTSTRAP_LAST_NAME: Last name for initial Cog administrator",
+      "Type": "String",
+      "Default": "Administrator"
+    },
+    "CogBootstrapEmailAddress": {
+      "Description": "COG_BOOTSTRAP_EMAIL_ADDRESS: Email address for initial Cog administrator",
+      "Type": "String",
+      "Default": "cog@example.com"
+    },
+    "CogAllowSelfRegistration": {
+      "Description": "COG_ALLOW_SELF_REGISTRATION: Allow users to register themselves with Cog",
+      "Type": "String",
+      "Default": "false",
+      "AllowedValues": [
+        "false",
+        "true"
+      ]
+    },
+    "CogApiUrlHost": {
+      "Description": "COG_API_URL_HOST: Hostname or IP for Cog API endpoint - defaults to ELB hostname",
+      "Type": "String",
+      "Default": ""
+    },
+    "CogApiUrlPort": {
+      "Description": "COG_API_URL_PORT: Port for Cog API endpoint",
+      "Type": "String",
+      "Default": "4000"
+    },
+    "CogTriggerUrlBase": {
+      "Description": "COG_TRIGGER_URL_BASE: Base URL for Cog Trigger endpoint",
+      "Type": "String",
+      "Default": ""
+    },
+    "CogTriggerUrlHost": {
+      "Description": "COG_TRIGGER_URL_HOST: Hostname or IP for Cog Trigger endpoint - defaults to ELB hostname",
+      "Type": "String",
+      "Default": ""
+    },
+    "CogTriggerUrlPort": {
+      "Description": "COG_TRIGGER_URL_PORT: Port for for Cog Trigger endpoint",
+      "Type": "String",
+      "Default": "4001"
+    },
+    "CogServiceUrlBase": {
+      "Description": "COG_SERVICE_URL_BASE: Base URL for Cog Service endpoint",
+      "Type": "String",
+      "Default": ""
+    },
+    "CogServiceUrlHost": {
+      "Description": "COG_SERVICE_URL_HOST: Hostname or IP for for Cog Service endpoint - defaults to ELB hostname",
+      "Type": "String",
+      "Default": ""
+    },
+    "CogServiceUrlPort": {
+      "Description": "COG_SERVICE_URL_PORT: Port for for Cog Service endpoint",
+      "Type": "String",
+      "Default": "4002"
+    }
+  },
+  "Conditions": {
+    "CogImageEmpty": {
+      "Fn::Equals": [
+        {
+          "Ref": "CogImage"
+        },
+        ""
+      ]
+    },
+    "SlackApiTokenEmpty": {
+      "Fn::Equals": [
+        {
+          "Ref": "SlackApiToken"
+        },
+        ""
+      ]
+    },
+    "RelayImageEmpty": {
+      "Fn::Equals": [
+        {
+          "Ref": "RelayImage"
+        },
+        ""
+      ]
+    },
+    "RelayIdEmpty": {
+      "Fn::Equals": [
+        {
+          "Ref": "RelayId"
+        },
+        ""
+      ]
+    },
+    "RelayCogTokenEmpty": {
+      "Fn::Equals": [
+        {
+          "Ref": "RelayCogToken"
+        },
+        ""
+      ]
+    },
+    "ProvisionRds": {
+      "Fn::Equals": [
+        {
+          "Ref": "DatabaseSource"
+        },
+        "RDS"
+      ]
+    },
+    "CogBootstrapInstance": {
+      "Fn::Equals": [
+        {
+          "Ref": "CogBootstrapInstance"
+        },
+        "automatic"
+      ]
+    },
+    "CogBootstrapUsernameEmpty": {
+      "Fn::Equals": [
+        {
+          "Ref": "CogBootstrapUsername"
+        },
+        ""
+      ]
+    },
+    "CogBootstrapPasswordEmpty": {
+      "Fn::Equals": [
+        {
+          "Ref": "CogBootstrapPassword"
+        },
+        ""
+      ]
+    },
+    "CogBootstrapFirstNameEmpty": {
+      "Fn::Equals": [
+        {
+          "Ref": "CogBootstrapFirstName"
+        },
+        ""
+      ]
+    },
+    "CogBootstrapLastNameEmpty": {
+      "Fn::Equals": [
+        {
+          "Ref": "CogBootstrapLastName"
+        },
+        ""
+      ]
+    },
+    "CogBootstrapEmailAddressEmpty": {
+      "Fn::Equals": [
+        {
+          "Ref": "CogBootstrapEmailAddress"
+        },
+        ""
+      ]
+    },
+    "CogAllowSelfRegistration": {
+      "Fn::Equals": [
+        {
+          "Ref": "CogAllowSelfRegistration"
+        },
+        "true"
+      ]
+    },
+    "CogApiUrlHostEmpty": {
+      "Fn::Equals": [
+        {
+          "Ref": "CogApiUrlHost"
+        },
+        ""
+      ]
+    },
+    "CogApiUrlPortEmpty": {
+      "Fn::Equals": [
+        {
+          "Ref": "CogApiUrlPort"
+        },
+        ""
+      ]
+    },
+    "CogTriggerUrlBaseEmpty": {
+      "Fn::Equals": [
+        {
+          "Ref": "CogTriggerUrlBase"
+        },
+        ""
+      ]
+    },
+    "CogTriggerUrlHostEmpty": {
+      "Fn::Equals": [
+        {
+          "Ref": "CogTriggerUrlHost"
+        },
+        ""
+      ]
+    },
+    "CogTriggerUrlPortEmpty": {
+      "Fn::Equals": [
+        {
+          "Ref": "CogTriggerUrlPort"
+        },
+        ""
+      ]
+    },
+    "CogServiceUrlBaseEmpty": {
+      "Fn::Equals": [
+        {
+          "Ref": "CogServiceUrlBase"
+        },
+        ""
+      ]
+    },
+    "CogServiceUrlHostEmpty": {
+      "Fn::Equals": [
+        {
+          "Ref": "CogServiceUrlHost"
+        },
+        ""
+      ]
+    },
+    "CogServiceUrlPortEmpty": {
+      "Fn::Equals": [
+        {
+          "Ref": "CogServiceUrlPort"
+        },
+        ""
+      ]
+    }
+  },
+  "Metadata": {
+    "AWS::CloudFormation::Interface": {
+      "ParameterGroups": [
+        {
+          "Label": {
+            "default": "AWS Global Configuration"
+          },
+          "Parameters": [
+            "VpcId",
+            "SubnetIds",
+            "KeyName",
+            "InstanceType",
+            "ImageId"
+          ]
+        },
+        {
+          "Label": {
+            "default": "Database Source"
+          },
+          "Parameters": [
+            "DatabaseSource"
+          ]
+        },
+        {
+          "Label": {
+            "default": "Database Configuration: External (Skip for RDS)"
+          },
+          "Parameters": [
+            "DatabaseUrl"
+          ]
+        },
+        {
+          "Label": {
+            "default": "Database Configuration: RDS (Skip for External)"
+          },
+          "Parameters": [
+            "RdsMasterUsername",
+            "RdsMasterPassword",
+            "RdsInstanceType",
+            "RdsStorage",
+            "RdsBackupRetention",
+            "RdsMultiAZ"
+          ]
+        },
+        {
+          "Label": {
+            "default": "Cog Config (Required)"
+          },
+          "Parameters": [
+            "CogImage",
+            "SlackApiToken",
+            "RelayImage",
+            "RelayId",
+            "RelayCogToken"
+          ]
+        },
+        {
+          "Label": {
+            "default": "Cog Config (Bootstrap)"
+          },
+          "Parameters": [
+            "CogBootstrapInstance",
+            "CogBootstrapUsername",
+            "CogBootstrapPassword",
+            "CogBootstrapFirstName",
+            "CogBootstrapLastName",
+            "CogBootstrapEmailAddress"
+          ]
+        },
+        {
+          "Label": {
+            "default": "Cog Config (Frequently Updated)"
+          },
+          "Parameters": [
+            "CogAllowSelfRegistration"
+          ]
+        },
+        {
+          "Label": {
+            "default": "Cog Config (Host Settings)"
+          },
+          "Parameters": [
+            "CogApiUrlHost",
+            "CogApiUrlPort",
+            "CogTriggerUrlBase",
+            "CogTriggerUrlHost",
+            "CogTriggerUrlPort",
+            "CogServiceUrlBase",
+            "CogServiceUrlHost",
+            "CogServiceUrlPort"
+          ]
+        }
+      ],
+      "ParameterLabels": {
+        "VpcId": {
+          "default": "* VPC ID"
+        },
+        "KeyName": {
+          "default": "* EC2 SSH Keypair"
+        },
+        "InstanceType": {
+          "default": "* EC2 Instance Type"
+        },
+        "ImageId": {
+          "default": "* EC2 AMI"
+        },
+        "SubnetIds": {
+          "default": "* VPC Subnet IDs"
+        },
+        "RdsMasterUsername": {
+          "default": "RDS Username"
+        },
+        "RdsMasterPassword": {
+          "default": "RDS Password"
+        },
+        "RdsInstanceType": {
+          "default": "DB Instance Type"
+        },
+        "RdsStorage": {
+          "default": "Storage (GB)"
+        },
+        "RdsBackupRetention": {
+          "default": "Backup Retention (Days)"
+        },
+        "RdsMultiAZ": {
+          "default": "Multi-AZ HA"
+        },
+        "CogImage": {
+          "default": "* Cog Docker Image"
+        },
+        "SlackApiToken": {
+          "default": "* Slack API Token"
+        },
+        "RelayImage": {
+          "default": "* Relay Docker Image"
+        },
+        "RelayId": {
+          "default": "* Relay UUID"
+        },
+        "RelayCogToken": {
+          "default": "* Relay Secret"
+        },
+        "DatabaseSource": {
+          "default": "* Database Source"
+        },
+        "DatabaseUrl": {
+          "default": "Database URL"
+        },
+        "CogBootstrapInstance": {
+          "default": "* Bootstrap Method"
+        },
+        "CogAllowSelfRegistration": {
+          "default": "* Self Registration"
+        },
+        "CogBootstrapUsername": {
+          "default": "Username"
+        },
+        "CogBootstrapPassword": {
+          "default": "Password"
+        },
+        "CogBootstrapFirstName": {
+          "default": "First Name"
+        },
+        "CogBootstrapLastName": {
+          "default": "Last Name"
+        },
+        "CogBootstrapEmailAddress": {
+          "default": "Email Address"
+        },
+        "CogApiUrlHost": {
+          "default": "API Host"
+        },
+        "CogApiUrlPort": {
+          "default": "API Port"
+        },
+        "CogTriggerUrlBase": {
+          "default": "Trigger Base"
+        },
+        "CogTriggerUrlHost": {
+          "default": "Trigger Host"
+        },
+        "CogTriggerUrlPort": {
+          "default": "Trigger Port"
+        },
+        "CogServiceUrlBase": {
+          "default": "Service Base"
+        },
+        "CogServiceUrlHost": {
+          "default": "Service Host"
+        },
+        "CogServiceUrlPort": {
+          "default": "Service Port"
+        }
+      }
+    }
+  },
+  "Resources": {
+    "CogElbSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": "Cog Load Balancer",
+        "VpcId": {
+          "Ref": "VpcId"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "cog-elb"
+          }
+        ]
+      }
+    },
+    "CogElbEgressAny": {
+      "Type": "AWS::EC2::SecurityGroupEgress",
+      "Properties": {
+        "GroupId": {
+          "Ref": "CogElbSecurityGroup"
+        },
+        "FromPort": -1,
+        "ToPort": -1,
+        "IpProtocol": -1,
+        "CidrIp": "0.0.0.0/0"
+      }
+    },
+    "CogElbIngressICMP": {
+      "Type": "AWS::EC2::SecurityGroupIngress",
+      "Properties": {
+        "GroupId": {
+          "Ref": "CogElbSecurityGroup"
+        },
+        "FromPort": -1,
+        "ToPort": -1,
+        "IpProtocol": 1,
+        "CidrIp": "0.0.0.0/0"
+      }
+    },
+    "CogElbIngressAPI": {
+      "Type": "AWS::EC2::SecurityGroupIngress",
+      "Properties": {
+        "GroupId": {
+          "Ref": "CogElbSecurityGroup"
+        },
+        "FromPort": 80,
+        "ToPort": 80,
+        "IpProtocol": 6,
+        "CidrIp": "0.0.0.0/0"
+      }
+    },
+    "CogElbIngressServices": {
+      "Type": "AWS::EC2::SecurityGroupIngress",
+      "Properties": {
+        "GroupId": {
+          "Ref": "CogElbSecurityGroup"
+        },
+        "FromPort": 4001,
+        "ToPort": 4001,
+        "IpProtocol": 6,
+        "CidrIp": "0.0.0.0/0"
+      }
+    },
+    "CogElbIngressTriggers": {
+      "Type": "AWS::EC2::SecurityGroupIngress",
+      "Properties": {
+        "GroupId": {
+          "Ref": "CogElbSecurityGroup"
+        },
+        "FromPort": 4002,
+        "ToPort": 4002,
+        "IpProtocol": 6,
+        "CidrIp": "0.0.0.0/0"
+      }
+    },
+    "CogElb": {
+      "Type": "AWS::ElasticLoadBalancing::LoadBalancer",
+      "Properties": {
+        "CrossZone": true,
+        "HealthCheck": {
+          "Target": "HTTP:4000/v1/bootstrap",
+          "HealthyThreshold": "3",
+          "UnhealthyThreshold": "5",
+          "Interval": "10",
+          "Timeout": "5"
+        },
+        "Subnets": {
+          "Ref": "SubnetIds"
+        },
+        "SecurityGroups": [
+          {
+            "Ref": "CogElbSecurityGroup"
+          }
+        ],
+        "Listeners": [
+          {
+            "InstancePort": "4000",
+            "InstanceProtocol": "HTTP",
+            "LoadBalancerPort": "80",
+            "Protocol": "HTTP"
+          },
+          {
+            "InstancePort": "4001",
+            "InstanceProtocol": "HTTP",
+            "LoadBalancerPort": "4001",
+            "Protocol": "HTTP"
+          },
+          {
+            "InstancePort": "4002",
+            "InstanceProtocol": "HTTP",
+            "LoadBalancerPort": "4002",
+            "Protocol": "HTTP"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "cog"
+          }
+        ]
+      }
+    },
+    "CogInstanceSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": "Cog Security Group",
+        "VpcId": {
+          "Ref": "VpcId"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "cog-instance"
+          }
+        ]
+      }
+    },
+    "CogInstanceEgressAny": {
+      "Type": "AWS::EC2::SecurityGroupEgress",
+      "Properties": {
+        "GroupId": {
+          "Ref": "CogInstanceSecurityGroup"
+        },
+        "FromPort": -1,
+        "ToPort": -1,
+        "IpProtocol": -1,
+        "CidrIp": "0.0.0.0/0"
+      }
+    },
+    "CogInstanceIngressICMP": {
+      "Type": "AWS::EC2::SecurityGroupIngress",
+      "Properties": {
+        "GroupId": {
+          "Ref": "CogInstanceSecurityGroup"
+        },
+        "FromPort": -1,
+        "ToPort": -1,
+        "IpProtocol": 1,
+        "CidrIp": "0.0.0.0/0"
+      }
+    },
+    "CogInstanceIngressSSH": {
+      "Type": "AWS::EC2::SecurityGroupIngress",
+      "Properties": {
+        "GroupId": {
+          "Ref": "CogInstanceSecurityGroup"
+        },
+        "FromPort": 22,
+        "ToPort": 22,
+        "IpProtocol": 6,
+        "CidrIp": "0.0.0.0/0"
+      }
+    },
+    "CogInstanceIngressAPIs": {
+      "Type": "AWS::EC2::SecurityGroupIngress",
+      "Properties": {
+        "GroupId": {
+          "Ref": "CogInstanceSecurityGroup"
+        },
+        "FromPort": 4000,
+        "ToPort": 4002,
+        "IpProtocol": 6,
+        "SourceSecurityGroupId": {
+          "Ref": "CogElbSecurityGroup"
+        }
+      }
+    },
+    "CogInstanceProfile": {
+      "Type": "AWS::IAM::InstanceProfile",
+      "Properties": {
+        "Path": "/cog/",
+        "Roles": [
+          {
+            "Ref": "CogInstanceRole"
+          }
+        ]
+      }
+    },
+    "CogInstanceRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": [
+                  "ec2.amazonaws.com"
+                ]
+              },
+              "Action": [
+                "sts:AssumeRole"
+              ]
+            }
+          ]
+        },
+        "Path": "/cog/"
+      }
+    },
+    "CogAsg": {
+      "Type": "AWS::AutoScaling::AutoScalingGroup",
+      "Properties": {
+        "VPCZoneIdentifier": {
+          "Ref": "SubnetIds"
+        },
+        "DesiredCapacity": 1,
+        "HealthCheckType": "EC2",
+        "HealthCheckGracePeriod": 300,
+        "LaunchConfigurationName": {
+          "Ref": "CogAsgLaunchConfig"
+        },
+        "LoadBalancerNames": [
+          {
+            "Ref": "CogElb"
+          }
+        ],
+        "MaxSize": 1,
+        "MinSize": 1
+      }
+    },
+    "CogAsgLaunchConfig": {
+      "Type": "AWS::AutoScaling::LaunchConfiguration",
+      "Properties": {
+        "AssociatePublicIpAddress": true,
+        "IamInstanceProfile": {
+          "Ref": "CogInstanceProfile"
+        },
+        "ImageId": {
+          "Ref": "ImageId"
+        },
+        "KeyName": {
+          "Ref": "KeyName"
+        },
+        "InstanceType": {
+          "Ref": "InstanceType"
+        },
+        "SecurityGroups": [
+          {
+            "Ref": "CogInstanceSecurityGroup"
+          }
+        ],
+        "UserData": {
+          "Fn::Base64": {
+            "Fn::Join": [
+              "",
+              [
+                "#cloud-config\napt_upgrade: true\napt_sources:\n  - source: deb https://apt.dockerproject.org/repo ubuntu-xenial main\n    keyserver: hkp://p80.pool.sks-keyservers.net:80\n    keyid: 58118E89F3A912897C070ADBF76221572C52609D\npackages:\n  - apt-transport-https\n  - ca-certificates\n  - python-setuptools\n  - linux-image-extra-virtual\n  - docker-engine\nruncmd:\n  - easy_install https://s3.amazonaws.com/cloudformation-examples/aws-cfn-bootstrap-latest.tar.gz\n  - easy_install docker-compose\n  - service docker start\n",
+                "  - cfn-init -s ",
+                {
+                  "Ref": "AWS::StackName"
+                },
+                " -r CogAsgLaunchConfig\n"
+              ]
+            ]
+          }
+        }
+      },
+      "Metadata": {
+        "AWS::CloudFormation::Init": {
+          "configSets": {
+            "default": [
+              "setup_paths",
+              "configure",
+              "run"
+            ]
+          },
+          "setup_paths": {
+            "commands": {
+              "create_cog_home": {
+                "command": "mkdir -m 0700 -p /opt/cog"
+              }
+            }
+          },
+          "configure": {
+            "files": {
+              "/opt/cog/.env": {
+                "content": {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "COG_IMAGE=",
+                      {
+                        "Ref": "CogImage"
+                      },
+                      "\n",
+                      "SLACK_API_TOKEN=",
+                      {
+                        "Ref": "SlackApiToken"
+                      },
+                      "\n",
+                      "DATABASE_URL=",
+                      {
+                        "Fn::If": [
+                          "ProvisionRds",
+                          {
+                            "Fn::Join": [
+                              "",
+                              [
+                                "ecto://",
+                                {
+                                  "Ref": "RdsMasterUsername"
+                                },
+                                ":",
+                                {
+                                  "Ref": "RdsMasterPassword"
+                                },
+                                "@",
+                                {
+                                  "Fn::GetAtt": [
+                                    "RdsDatabase",
+                                    "Endpoint.Address"
+                                  ]
+                                },
+                                ":",
+                                {
+                                  "Fn::GetAtt": [
+                                    "RdsDatabase",
+                                    "Endpoint.Port"
+                                  ]
+                                },
+                                "/cog",
+                                "\n"
+                              ]
+                            ]
+                          },
+                          {
+                            "Ref": "DatabaseUrl"
+                          }
+                        ]
+                      },
+                      "COG_ALLOW_SELF_REGISTRATION=",
+                      {
+                        "Ref": "CogAllowSelfRegistration"
+                      },
+                      "\n",
+                      {
+                        "Fn::If": [
+                          "CogBootstrapInstance",
+                          {
+                            "Fn::Join": [
+                              "",
+                              [
+                                "COG_BOOTSTRAP_EMAIL_ADDRESS=",
+                                {
+                                  "Ref": "CogBootstrapEmailAddress"
+                                },
+                                "\n",
+                                "COG_BOOTSTRAP_FIRST_NAME=",
+                                {
+                                  "Ref": "CogBootstrapFirstName"
+                                },
+                                "\n",
+                                "COG_BOOTSTRAP_LAST_NAME=",
+                                {
+                                  "Ref": "CogBootstrapLastName"
+                                },
+                                "\n",
+                                "COG_BOOTSTRAP_PASSWORD=",
+                                {
+                                  "Ref": "CogBootstrapPassword"
+                                },
+                                "\n",
+                                "COG_BOOTSTRAP_USERNAME=",
+                                {
+                                  "Ref": "CogBootstrapUsername"
+                                },
+                                "\n"
+                              ]
+                            ]
+                          },
+                          ""
+                        ]
+                      },
+                      "COG_API_URL_HOST=",
+                      {
+                        "Fn::If": [
+                          "CogApiUrlHostEmpty",
+                          {
+                            "Fn::GetAtt": [
+                              "CogElb",
+                              "DNSName"
+                            ]
+                          },
+                          {
+                            "Ref": "CogApiUrlHost"
+                          }
+                        ]
+                      },
+                      "\n",
+                      "COG_API_URL_PORT=",
+                      {
+                        "Ref": "CogApiUrlPort"
+                      },
+                      "\n",
+                      "COG_SERVICE_URL_BASE=",
+                      {
+                        "Ref": "CogServiceUrlBase"
+                      },
+                      "\n",
+                      "COG_SERVICE_URL_HOST=",
+                      {
+                        "Fn::If": [
+                          "CogServiceUrlHostEmpty",
+                          {
+                            "Fn::GetAtt": [
+                              "CogElb",
+                              "DNSName"
+                            ]
+                          },
+                          {
+                            "Ref": "CogServiceUrlHost"
+                          }
+                        ]
+                      },
+                      "\n",
+                      "COG_SERVICE_URL_PORT=",
+                      {
+                        "Ref": "CogServiceUrlPort"
+                      },
+                      "\n",
+                      "COG_TRIGGER_URL_BASE=",
+                      {
+                        "Ref": "CogTriggerUrlBase"
+                      },
+                      "\n",
+                      "COG_TRIGGER_URL_HOST=",
+                      {
+                        "Fn::If": [
+                          "CogTriggerUrlHostEmpty",
+                          {
+                            "Fn::GetAtt": [
+                              "CogElb",
+                              "DNSName"
+                            ]
+                          },
+                          {
+                            "Ref": "CogTriggerUrlHost"
+                          }
+                        ]
+                      },
+                      "\n",
+                      "COG_TRIGGER_URL_PORT=",
+                      {
+                        "Ref": "CogTriggerUrlPort"
+                      },
+                      "\n",
+                      "RELAY_ID=",
+                      {
+                        "Ref": "RelayId"
+                      },
+                      "\n",
+                      "RELAY_IMAGE=",
+                      {
+                        "Ref": "RelayImage"
+                      },
+                      "\n",
+                      "RELAY_COG_TOKEN=",
+                      {
+                        "Ref": "RelayCogToken"
+                      },
+                      "\n"
+                    ]
+                  ]
+                },
+                "mode": "0600",
+                "owner": "root",
+                "group": "root"
+              },
+              "/opt/cog/docker-compose.yml": {
+                "content": "version: \"2\"\nservices:\n  cog:\n    image: \"${COG_IMAGE}\"\n    environment:\n      - COG_MQTT_HOST=0.0.0.0\n      - DATABASE_URL=${DATABASE_URL}\n      - SLACK_API_TOKEN=${SLACK_API_TOKEN}\n      - COG_BOOTSTRAP_USERNAME=${COG_BOOTSTRAP_USERNAME}\n      - COG_BOOTSTRAP_PASSWORD=${COG_BOOTSTRAP_PASSWORD}\n      - COG_BOOTSTRAP_EMAIL_ADDRESS=${COG_BOOTSTRAP_EMAIL_ADDRESS}\n      - COG_BOOTSTRAP_FIRST_NAME=${COG_BOOTSTRAP_FIRST_NAME}\n      - COG_BOOTSTRAP_LAST_NAME=${COG_BOOTSTRAP_LAST_NAME}\n      - COG_API_URL_HOST=${COG_API_URL_HOST}\n      - COG_API_URL_PORT=${COG_API_URL_PORT}\n      - COG_TRIGGER_URL_BASE=${COG_TRIGGER_URL_BASE}\n      - COG_TRIGGER_URL_HOST=${COG_TRIGGER_URL_HOST}\n      - COG_TRIGGER_URL_PORT=${COG_TRIGGER_URL_PORT}\n      - COG_SERVICE_URL_BASE=${COG_SERVICE_URL_BASE}\n      - COG_SERVICE_URL_HOST=${COG_SERVICE_URL_HOST}\n      - COG_SERVICE_URL_PORT=${COG_SERVICE_URL_PORT}\n      - RELAY_ID=${RELAY_ID}\n      - RELAY_COG_TOKEN=${RELAY_COG_TOKEN}\n    ports:\n      - 1883:1883\n      - 4000:4000\n      - 4001:4001\n      - 4002:4002\n    restart: always\n    entrypoint: /home/operable/cog/scripts/docker-start\n  relay:\n    image: \"${RELAY_IMAGE}\"\n    privileged: true\n    volumes:\n      - /var/run/docker.sock:/var/run/docker.sock\n    environment:\n      - RELAY_ID=${RELAY_ID}\n      - RELAY_COG_TOKEN=${RELAY_COG_TOKEN}\n      - RELAY_COG_REFRESH_INTERVAL=30s\n      - RELAY_DOCKER_CLEAN_INTERVAL=1m\n      - RELAY_COG_HOST=cog\n      - RELAY_DYNAMIC_CONFIG_ROOT=/tmp/bundle_configs\n    links:\n      - cog\n    restart: always\n    entrypoint: /usr/local/bin/relay\n",
+                "mode": "0600",
+                "owner": "root",
+                "group": "root"
+              }
+            }
+          },
+          "run": {
+            "commands": {
+              "docker_start": {
+                "command": "/usr/local/bin/docker-compose up -d",
+                "cwd": "/opt/cog"
+              }
+            }
+          }
+        }
+      }
+    },
+    "RdsSubnetGroup": {
+      "Type": "AWS::RDS::DBSubnetGroup",
+      "Condition": "ProvisionRds",
+      "Properties": {
+        "DBSubnetGroupDescription": "Cog Database",
+        "SubnetIds": {
+          "Ref": "SubnetIds"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "cog"
+          }
+        ]
+      }
+    },
+    "RdsSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Condition": "ProvisionRds",
+      "Properties": {
+        "GroupDescription": "Cog RDS Security Group",
+        "VpcId": {
+          "Ref": "VpcId"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "cog-rds"
+          }
+        ]
+      }
+    },
+    "RdsEgressAny": {
+      "Type": "AWS::EC2::SecurityGroupEgress",
+      "Condition": "ProvisionRds",
+      "Properties": {
+        "GroupId": {
+          "Ref": "RdsSecurityGroup"
+        },
+        "FromPort": -1,
+        "ToPort": -1,
+        "IpProtocol": -1,
+        "CidrIp": "0.0.0.0/0"
+      }
+    },
+    "RdsIngressICMP": {
+      "Type": "AWS::EC2::SecurityGroupIngress",
+      "Condition": "ProvisionRds",
+      "Properties": {
+        "GroupId": {
+          "Ref": "RdsSecurityGroup"
+        },
+        "FromPort": -1,
+        "ToPort": -1,
+        "IpProtocol": 1,
+        "CidrIp": "0.0.0.0/0"
+      }
+    },
+    "RdsIngressPg": {
+      "Type": "AWS::EC2::SecurityGroupIngress",
+      "Condition": "ProvisionRds",
+      "Properties": {
+        "GroupId": {
+          "Ref": "RdsSecurityGroup"
+        },
+        "FromPort": 5432,
+        "ToPort": 5432,
+        "IpProtocol": 6,
+        "SourceSecurityGroupId": {
+          "Ref": "CogInstanceSecurityGroup"
+        }
+      }
+    },
+    "RdsDatabase": {
+      "Type": "AWS::RDS::DBInstance",
+      "Condition": "ProvisionRds",
+      "Properties": {
+        "AllocatedStorage": {
+          "Ref": "RdsStorage"
+        },
+        "BackupRetentionPeriod": {
+          "Ref": "RdsBackupRetention"
+        },
+        "DBName": "cog",
+        "DBInstanceClass": {
+          "Ref": "RdsInstanceType"
+        },
+        "DBSubnetGroupName": {
+          "Ref": "RdsSubnetGroup"
+        },
+        "Engine": "postgres",
+        "MultiAZ": {
+          "Ref": "RdsMultiAZ"
+        },
+        "StorageType": "gp2",
+        "VPCSecurityGroups": [
+          {
+            "Ref": "RdsSecurityGroup"
+          }
+        ],
+        "MasterUsername": {
+          "Ref": "RdsMasterUsername"
+        },
+        "MasterUserPassword": {
+          "Ref": "RdsMasterPassword"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "cog"
+          }
+        ]
+      }
+    }
+  },
+  "Outputs": {
+    "CogElbHostname": {
+      "Value": {
+        "Fn::GetAtt": [
+          "CogElb",
+          "DNSName"
+        ]
+      }
+    },
+    "CogSecurityGroup": {
+      "Value": {
+        "Fn::GetAtt": [
+          "CogInstanceSecurityGroup",
+          "GroupId"
+        ]
+      }
+    },
+    "CogInstanceRole": {
+      "Value": {
+        "Fn::GetAtt": [
+          "CogInstanceRole",
+          "Arn"
+        ]
+      }
+    },
+    "CogDatabaseHost": {
+      "Condition": "ProvisionRds",
+      "Value": {
+        "Fn::GetAtt": [
+          "RdsDatabase",
+          "Endpoint.Address"
+        ]
+      }
+    },
+    "CogDatabasePort": {
+      "Condition": "ProvisionRds",
+      "Value": {
+        "Fn::GetAtt": [
+          "RdsDatabase",
+          "Endpoint.Port"
+        ]
+      }
+    }
+  }
+}
