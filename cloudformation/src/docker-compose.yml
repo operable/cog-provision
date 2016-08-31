@@ -42,6 +42,7 @@ services:
       - RELAY_DOCKER_CLEAN_INTERVAL=1m
       - RELAY_COG_HOST=cog
       - RELAY_MANAGED_DYNAMIC_CONFIG=true
+      - RELAY_DYNAMIC_CONFIG_ROOT=/tmp/bundle_configs
     links:
       - cog
     restart: always
