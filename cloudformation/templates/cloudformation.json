@@ -795,6 +795,11 @@
     },
     "CogAsg": {
       "Type": "AWS::AutoScaling::AutoScalingGroup",
+      "UpdatePolicy": {
+        "AutoScalingReplacingUpdate": {
+          "WillReplace": true
+        }
+      },
       "Properties": {
         "VPCZoneIdentifier": {
           "Ref": "SubnetIds"
