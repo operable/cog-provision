@@ -136,7 +136,7 @@ resource "CogInstanceIngressSSH", :Type => "AWS::EC2::SecurityGroupIngress", :Pr
   :FromPort => 22,
   :ToPort => 22,
   :IpProtocol => 6,
-  :CidrIp => "0.0.0.0/0"
+  :CidrIp => ref("SshCidrBlock")
 }
 
 resource "CogInstanceIngressAPIs", :Type => "AWS::EC2::SecurityGroupIngress", :Properties => {

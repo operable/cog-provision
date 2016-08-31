@@ -6,7 +6,7 @@
 # Required AWS Configuration
 #
 
-aws_params = %w(VpcId SubnetIds KeyName InstanceType ImageId)
+aws_params = %w(VpcId SubnetIds KeyName SshCidrBlock InstanceType ImageId)
 
 parameter "VpcId",
   :Description => "VPC ID for Cog deployment",
@@ -18,6 +18,12 @@ parameter "KeyName",
   :Description => "Name of an existing EC2 KeyPair to enable SSH access",
   :Type => "AWS::EC2::KeyPair::KeyName",
   :ConstraintDescription => "must be the name of an existing EC2 KeyPair"
+
+parameter "SshCidrBlock",
+  :Description => "The CIDR block from which to allow SSH access",
+  :Type => "String",
+  :Default => "0.0.0.0/0",
+  :ConstraintDescription => "must be a CIDR block"
 
 parameter "InstanceType",
   :Description => "Cog Host EC2 instance type",
