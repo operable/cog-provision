@@ -1170,6 +1170,7 @@
     "RdsDatabase": {
       "Type": "AWS::RDS::DBInstance",
       "Condition": "ProvisionRds",
+      "DeletionPolicy": "Snapshot",
       "Properties": {
         "AllocatedStorage": {
           "Ref": "RdsStorage"
