@@ -74,6 +74,7 @@ resource "RdsIngressPg",
 resource "RdsDatabase",
   :Type => "AWS::RDS::DBInstance",
   :Condition => "ProvisionRds",
+  :DeletionPolicy => "Snapshot",
   :Properties => {
     :AllocatedStorage => ref("RdsStorage"),
     :BackupRetentionPeriod => ref("RdsBackupRetention"),
@@ -86,6 +87,7 @@ resource "RdsDatabase",
     :VPCSecurityGroups => [ ref("RdsSecurityGroup") ],
     :MasterUsername => ref("RdsMasterUsername"),
     :MasterUserPassword => ref("RdsMasterPassword"),
+    :DBSnapshotIdentifier => fn_if("HasDBSnapshot", ref("RdsSnapshotIdentifier"), ref("AWS::NoValue")),
     :Tags => [
       {
         :Key => "Name",

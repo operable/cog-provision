@@ -431,7 +431,8 @@
             "RdsInstanceType",
             "RdsStorage",
             "RdsBackupRetention",
-            "RdsMultiAZ"
+            "RdsMultiAZ",
+            "RdsSnapshotIdentifier"
           ]
         },
         {
@@ -1199,17 +1200,6 @@
         "DBInstanceClass": {
           "Ref": "RdsInstanceType"
         },
-        "DBSnapshotIdentifier": {
-          "Fn::If": [
-            "HasDBSnapshot",
-            {
-              "Ref": "RdsSnapshotIdentifier"
-            },
-            {
-              "Ref": "AWS::NoValue"
-            }
-          ]
-        },
         "DBSubnetGroupName": {
           "Ref": "RdsSubnetGroup"
         },
@@ -1228,6 +1218,17 @@
         },
         "MasterUserPassword": {
           "Ref": "RdsMasterPassword"
+        },
+        "DBSnapshotIdentifier": {
+          "Fn::If": [
+            "HasDBSnapshot",
+            {
+              "Ref": "RdsSnapshotIdentifier"
+            },
+            {
+              "Ref": "AWS::NoValue"
+            }
+          ]
         },
         "Tags": [
           {

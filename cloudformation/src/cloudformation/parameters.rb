@@ -80,6 +80,8 @@ parameter "DatabaseSource",
 
 condition "ProvisionRds", equal(ref("DatabaseSource"), "RDS")
 
+condition "HasDBSnapshot", not_equal(ref("RdsSnapshotIdentifier"), "")
+
 ##
 # Cog Database (External)
 #
@@ -100,7 +102,7 @@ parameter "CogDbSsl",
 # Cog Database (RDS)
 #
 
-rds_params = %w(RdsMasterUsername RdsMasterPassword RdsInstanceType RdsStorage RdsBackupRetention RdsMultiAZ)
+rds_params = %w(RdsMasterUsername RdsMasterPassword RdsInstanceType RdsStorage RdsBackupRetention RdsMultiAZ RdsSnapshotIdentifier)
 
 parameter "RdsMasterUsername",
   :Description => "Username for Postgres admin user",
@@ -132,6 +134,11 @@ parameter "RdsMultiAZ",
   :Type => "String",
   :AllowedValues => %w(false true),
   :Default => "false"
+
+parameter "RdsSnapshotIdentifier",
+:Description => "The RDS DB snapshot to restore. Leave blank to create an empty database.",
+:Type => "String",
+:Default => ""
 
 ##
 # Cog Configuration (Bootstrap)
