@@ -10,6 +10,7 @@ packages:
   - python-setuptools
   - linux-image-extra-virtual
   - docker-engine
+  - awscli
 runcmd:
   - easy_install https://s3.amazonaws.com/cloudformation-examples/aws-cfn-bootstrap-latest.tar.gz
   - easy_install docker-compose

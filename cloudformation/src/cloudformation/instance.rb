@@ -1,4 +1,22 @@
 # ---------------------------------------------------------------------------
+# S3 Bucket - Used for logs and advanced configuration.
+# ---------------------------------------------------------------------------
+
+resource "CogBucket",
+  :Type => "AWS::S3::Bucket",
+  :Properties => {
+    :VersioningConfiguration => { :Status => "Enabled" },
+    :Tags => [
+      {
+        :Key => "Name",
+        :Value => "cog"
+      }
+    ]
+  }
+
+output "CogBucket", :Value => ref("CogBucket")
+
+# ---------------------------------------------------------------------------
 # ELB Configuration
 # ---------------------------------------------------------------------------
 
@@ -172,6 +190,31 @@ resource "CogInstanceRole",
     :Path => "/cog/"
   }
 
+resource "CogInstancePolicyS3",
+  :Type => "AWS::IAM::Policy",
+  :Properties => {
+    :Roles => [ ref("CogInstanceRole") ],
+    :PolicyName => "CogInstancePolicyS3",
+    :PolicyDocument => {
+      :Version => "2012-10-17",
+      :Statement => [
+        {
+          :Effect => "Allow",
+          :Action => [ "s3:ListBucket" ],
+          :Resource => [
+            join("", "arn:aws:s3:::", ref("CogBucket")),
+            join("", "arn:aws:s3:::", ref("CogBucket"), "/*")
+          ]
+        },
+        {
+          :Effect => "Allow",
+          :Action => [ "s3:PutObject", "s3:GetObject" ],
+          :Resource => [ join("", "arn:aws:s3:::", ref("CogBucket"), "/*") ]
+        }
+      ]
+    }
+  }
+
 output "CogInstanceRole", :Value => get_att("CogInstanceRole", "Arn")
 
 resource "CogAsg",
@@ -202,21 +245,28 @@ resource "CogAsgLaunchConfig",
     ))
   },
   :Metadata => {
+    "AWS::CloudFormation::Authentication" => {
+      :S3AccessCreds => {
+        :type => "S3",
+        :buckets => [ ref("CogBucket") ],
+        :roleName => ref("CogInstanceRole")
+      }
+    },
     "AWS::CloudFormation::Init" => {
-      "configSets" => {
-        "default" => [ "setup_paths", "configure", "run" ]
+      :configSets => {
+        :default => [ "setup_paths", "configure", "run" ]
       },
-      "setup_paths" => {
-        "commands" => {
-          "create_cog_home" => {
-            "command" => "mkdir -m 0700 -p /opt/cog",
+      :setup_paths => {
+        :commands => {
+          :create_cog_home => {
+            :command => "mkdir -m 0700 -p /opt/cog",
           }
         }
       },
-      "configure" => {
-        "files" => {
+      :configure => {
+        :files => {
           "/opt/cog/.env" => {
-            "content" => join("",
+            :content => join("",
               "COG_IMAGE=", ref("CogImage"), "\n",
               "SLACK_API_TOKEN=", ref("SlackApiToken"), "\n",
               fn_if("ProvisionRds",
@@ -255,23 +305,30 @@ resource "CogAsgLaunchConfig",
               "RELAY_IMAGE=", ref("RelayImage"), "\n",
               "RELAY_COG_TOKEN=", ref("RelayCogToken"), "\n"
             ),
-            "mode" => "0600",
-            "owner" => "root",
-            "group" => "root"
+            :mode => "0600",
+            :owner => "root",
+            :group => "root"
           },
           "/opt/cog/docker-compose.yml" => {
-            "content" => File.read(File.join(File.dirname(__FILE__), "..", "docker-compose.yml")),
-            "mode" => "0600",
-            "owner" => "root",
-            "group" => "root"
+            :content => File.read(File.join(File.dirname(__FILE__), "..", "docker-compose.yml")),
+            :mode => "0600",
+            :owner => "root",
+            :group => "root"
+          }
+        },
+        :commands => {
+          # We do this with AWSCLI so cfn-init won't abort if the file is not
+          # present.
+          :copy_s3_resources => {
+            :command => join("", "aws s3 cp --recursive s3://", ref("CogBucket"), "/etc/ /opt/cog || true")
           }
         }
       },
-      "run" => {
-        "commands" => {
-          "docker_start" => {
-            "command" => "/usr/local/bin/docker-compose up -d",
-            "cwd" => "/opt/cog"
+      :run => {
+        :commands => {
+          :docker_start => {
+            :command => "/usr/local/bin/docker-compose up -d",
+            :cwd => "/opt/cog"
           }
         }
       }

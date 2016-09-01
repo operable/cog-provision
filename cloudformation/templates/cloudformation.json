@@ -573,6 +573,20 @@
     }
   },
   "Resources": {
+    "CogBucket": {
+      "Type": "AWS::S3::Bucket",
+      "Properties": {
+        "VersioningConfiguration": {
+          "Status": "Enabled"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "cog"
+          }
+        ]
+      }
+    },
     "CogElbSecurityGroup": {
       "Type": "AWS::EC2::SecurityGroup",
       "Properties": {
@@ -793,6 +807,74 @@
         "Path": "/cog/"
       }
     },
+    "CogInstancePolicyS3": {
+      "Type": "AWS::IAM::Policy",
+      "Properties": {
+        "Roles": [
+          {
+            "Ref": "CogInstanceRole"
+          }
+        ],
+        "PolicyName": "CogInstancePolicyS3",
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Action": [
+                "s3:ListBucket"
+              ],
+              "Resource": [
+                {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "arn:aws:s3:::",
+                      {
+                        "Ref": "CogBucket"
+                      }
+                    ]
+                  ]
+                },
+                {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "arn:aws:s3:::",
+                      {
+                        "Ref": "CogBucket"
+                      },
+                      "/*"
+                    ]
+                  ]
+                }
+              ]
+            },
+            {
+              "Effect": "Allow",
+              "Action": [
+                "s3:PutObject",
+                "s3:GetObject"
+              ],
+              "Resource": [
+                {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "arn:aws:s3:::",
+                      {
+                        "Ref": "CogBucket"
+                      },
+                      "/*"
+                    ]
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
     "CogAsg": {
       "Type": "AWS::AutoScaling::AutoScalingGroup",
       "Properties": {
@@ -840,7 +922,7 @@
             "Fn::Join": [
               "",
               [
-                "#cloud-config\napt_upgrade: true\napt_sources:\n  - source: deb https://apt.dockerproject.org/repo ubuntu-xenial main\n    keyserver: hkp://p80.pool.sks-keyservers.net:80\n    keyid: 58118E89F3A912897C070ADBF76221572C52609D\npackages:\n  - apt-transport-https\n  - ca-certificates\n  - python-setuptools\n  - linux-image-extra-virtual\n  - docker-engine\nruncmd:\n  - easy_install https://s3.amazonaws.com/cloudformation-examples/aws-cfn-bootstrap-latest.tar.gz\n  - easy_install docker-compose\n  - service docker start\n",
+                "#cloud-config\napt_upgrade: true\napt_sources:\n  - source: deb https://apt.dockerproject.org/repo ubuntu-xenial main\n    keyserver: hkp://p80.pool.sks-keyservers.net:80\n    keyid: 58118E89F3A912897C070ADBF76221572C52609D\npackages:\n  - apt-transport-https\n  - ca-certificates\n  - python-setuptools\n  - linux-image-extra-virtual\n  - docker-engine\n  - awscli\nruncmd:\n  - easy_install https://s3.amazonaws.com/cloudformation-examples/aws-cfn-bootstrap-latest.tar.gz\n  - easy_install docker-compose\n  - service docker start\n",
                 "  - cfn-init -s ",
                 {
                   "Ref": "AWS::StackName"
@@ -852,6 +934,19 @@
         }
       },
       "Metadata": {
+        "AWS::CloudFormation::Authentication": {
+          "S3AccessCreds": {
+            "type": "S3",
+            "buckets": [
+              {
+                "Ref": "CogBucket"
+              }
+            ],
+            "roleName": {
+              "Ref": "CogInstanceRole"
+            }
+          }
+        },
         "AWS::CloudFormation::Init": {
           "configSets": {
             "default": [
@@ -1082,6 +1177,22 @@
                 "owner": "root",
                 "group": "root"
               }
+            },
+            "commands": {
+              "copy_s3_resources": {
+                "command": {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "aws s3 cp --recursive s3://",
+                      {
+                        "Ref": "CogBucket"
+                      },
+                      "/etc/ /opt/cog || true"
+                    ]
+                  ]
+                }
+              }
             }
           },
           "run": {
@@ -1211,6 +1322,11 @@
     }
   },
   "Outputs": {
+    "CogBucket": {
+      "Value": {
+        "Ref": "CogBucket"
+      }
+    },
     "CogElbHostname": {
       "Value": {
         "Fn::GetAtt": [
