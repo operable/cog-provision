@@ -13,6 +13,12 @@
       "Type": "AWS::EC2::KeyPair::KeyName",
       "ConstraintDescription": "must be the name of an existing EC2 KeyPair"
     },
+    "SshCidrBlock": {
+      "Description": "The CIDR block from which to allow SSH access",
+      "Type": "String",
+      "Default": "0.0.0.0/0",
+      "ConstraintDescription": "must be a CIDR block"
+    },
     "InstanceType": {
       "Description": "Cog Host EC2 instance type",
       "Type": "String",
@@ -383,6 +389,7 @@
             "VpcId",
             "SubnetIds",
             "KeyName",
+            "SshCidrBlock",
             "InstanceType",
             "ImageId"
           ]
@@ -757,7 +764,9 @@
         "FromPort": 22,
         "ToPort": 22,
         "IpProtocol": 6,
-        "CidrIp": "0.0.0.0/0"
+        "CidrIp": {
+          "Ref": "SshCidrBlock"
+        }
       }
     },
     "CogInstanceIngressAPIs": {
