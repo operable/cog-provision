@@ -38,6 +38,29 @@ parameter "SubnetIds",
   :ConstraintDescription => "must be a list of VPC subnet IDs"
 
 ##
+# HTTP Configuration
+#
+
+http_params = %w(CogDnsname SslCertificateArn)
+
+parameter "CogDnsname",
+  :Description => "DNS hostname to use for Cog APIs - defaults to ELB DNS name if not set",
+  :Type => "String",
+  :Default => ""
+
+condition "CogDnsnameExists", not_equal(ref("CogDnsname"), "")
+
+parameter "SslCertificateArn",
+  :Description => "AWS Certificate Manager ARN for SSL certificate to use for ELB",
+  :Type => "String",
+  :Default => "",
+  :AllowedPattern => "^(arn:aws:acm.*)?$",
+  :ConstraintDescription => "must be a valid AWS Certificate Manager ARN"
+
+condition "SslEnabled", not_equal(ref("SslCertificateArn"), "")
+condition "SslDisabled", equal(ref("SslCertificateArn"), "")
+
+##
 # Required Cog Configuration
 #
 
@@ -180,47 +203,7 @@ cog_config(group: :common,
            name: :cog_allow_self_registration,
            description: "Allow users to register themselves with Cog",
            default: "false",
-           allowed: %w(false true)
-)
-
-##
-# Cog Configuration (Host Information)
-#
-
-cog_config(group: :host,
-           name: :cog_api_url_host,
-           description: "Hostname or IP for Cog API endpoint - defaults to ELB hostname")
-
-cog_config(group: :host,
-           name: :cog_api_url_port,
-           description: "Port for Cog API endpoint",
-           default: "4000")
-
-cog_config(group: :host,
-           name: :cog_trigger_url_base,
-           description: "Base URL for Cog Trigger endpoint")
-
-cog_config(group: :host,
-           name: :cog_trigger_url_host,
-           description: "Hostname or IP for Cog Trigger endpoint - defaults to ELB hostname")
-
-cog_config(group: :host,
-           name: :cog_trigger_url_port,
-           description: "Port for for Cog Trigger endpoint",
-           default: "4001")
-
-cog_config(group: :host,
-           name: :cog_service_url_base,
-           description: "Base URL for Cog Service endpoint")
-
-cog_config(group: :host,
-           name: :cog_service_url_host,
-           description: "Hostname or IP for for Cog Service endpoint - defaults to ELB hostname")
-
-cog_config(group: :host,
-           name: :cog_service_url_port,
-           description: "Port for for Cog Service endpoint",
-           default: "4002")
+           allowed: %w(false true))
 
 ##
 # Cloudformation UI Metadata
@@ -238,6 +221,11 @@ aws_labels = {
   "RdsStorage" => { "default" => "Storage (GB)" },
   "RdsBackupRetention" => { "default" => "Backup Retention (Days)" },
   "RdsMultiAZ" => { "default" => "Multi-AZ HA" }
+}
+
+http_labels = {
+  "CogDnsname" => { "default" => "DNS Hostname" },
+  "SslCertificateArn" => { "default" => "SSL Certificate" }
 }
 
 cog_labels = {
@@ -258,11 +246,6 @@ bootstrap_labels = Hash[
     [ param, { "default" => param.gsub(/CogBootstrap/, "").gsub(/(\w)([A-Z])/, "\\1 \\2") }]
   end.compact]
 
-host_labels = Hash[
-  groups[:host].map do |param|
-    [ param, { "default" => param.gsub(/Cog/, "").gsub("Api", "API").gsub(/Url/, " ") }]
-  end.compact]
-
 cog_bootstrap = parameter_group(:bootstrap, "Cog Config (Bootstrap)")
 cog_bootstrap[:Parameters].unshift("CogBootstrapInstance")
 
@@ -271,6 +254,10 @@ metadata "AWS::CloudFormation::Interface",
     {
       :Label => { "default" => "AWS Global Configuration" },
       :Parameters => aws_params
+    },
+    {
+      :Label => { "default" => "HTTP Configuration" },
+      :Parameters => http_params
     },
     {
       :Label => { "default" => "Database Source" },
@@ -286,7 +273,6 @@ metadata "AWS::CloudFormation::Interface",
     },
     parameter_group(:required, "Cog Config (Required)"),
     cog_bootstrap,
-    parameter_group(:common, "Cog Config (Frequently Updated)"),
-    parameter_group(:host, "Cog Config (Host Settings)")
+    parameter_group(:common, "Cog Config (Frequently Updated)")
   ],
-  :ParameterLabels => aws_labels.merge(cog_labels).merge(bootstrap_labels).merge(host_labels)
+  :ParameterLabels => aws_labels.merge(http_labels).merge(cog_labels).merge(bootstrap_labels)

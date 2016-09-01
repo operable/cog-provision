@@ -31,6 +31,18 @@
       "Default": "",
       "ConstraintDescription": "must be a list of VPC subnet IDs"
     },
+    "CogDnsname": {
+      "Description": "DNS hostname to use for Cog APIs - defaults to ELB DNS name if not set",
+      "Type": "String",
+      "Default": ""
+    },
+    "SslCertificateArn": {
+      "Description": "AWS Certificate Manager ARN for SSL certificate to use for ELB",
+      "Type": "String",
+      "Default": "",
+      "AllowedPattern": "^(arn:aws:acm.*)?$",
+      "ConstraintDescription": "must be a valid AWS Certificate Manager ARN"
+    },
     "CogImage": {
       "MinLength": "1",
       "Description": "COG_IMAGE: Cog Docker Image",
@@ -160,49 +172,41 @@
         "false",
         "true"
       ]
-    },
-    "CogApiUrlHost": {
-      "Description": "COG_API_URL_HOST: Hostname or IP for Cog API endpoint - defaults to ELB hostname",
-      "Type": "String",
-      "Default": ""
-    },
-    "CogApiUrlPort": {
-      "Description": "COG_API_URL_PORT: Port for Cog API endpoint",
-      "Type": "String",
-      "Default": "4000"
-    },
-    "CogTriggerUrlBase": {
-      "Description": "COG_TRIGGER_URL_BASE: Base URL for Cog Trigger endpoint",
-      "Type": "String",
-      "Default": ""
-    },
-    "CogTriggerUrlHost": {
-      "Description": "COG_TRIGGER_URL_HOST: Hostname or IP for Cog Trigger endpoint - defaults to ELB hostname",
-      "Type": "String",
-      "Default": ""
-    },
-    "CogTriggerUrlPort": {
-      "Description": "COG_TRIGGER_URL_PORT: Port for for Cog Trigger endpoint",
-      "Type": "String",
-      "Default": "4001"
-    },
-    "CogServiceUrlBase": {
-      "Description": "COG_SERVICE_URL_BASE: Base URL for Cog Service endpoint",
-      "Type": "String",
-      "Default": ""
-    },
-    "CogServiceUrlHost": {
-      "Description": "COG_SERVICE_URL_HOST: Hostname or IP for for Cog Service endpoint - defaults to ELB hostname",
-      "Type": "String",
-      "Default": ""
-    },
-    "CogServiceUrlPort": {
-      "Description": "COG_SERVICE_URL_PORT: Port for for Cog Service endpoint",
-      "Type": "String",
-      "Default": "4002"
     }
   },
   "Conditions": {
+    "CogDnsnameExists": {
+      "Fn::Not": [
+        {
+          "Fn::Equals": [
+            {
+              "Ref": "CogDnsname"
+            },
+            ""
+          ]
+        }
+      ]
+    },
+    "SslEnabled": {
+      "Fn::Not": [
+        {
+          "Fn::Equals": [
+            {
+              "Ref": "SslCertificateArn"
+            },
+            ""
+          ]
+        }
+      ]
+    },
+    "SslDisabled": {
+      "Fn::Equals": [
+        {
+          "Ref": "SslCertificateArn"
+        },
+        ""
+      ]
+    },
     "CogImageEmpty": {
       "Fn::Equals": [
         {
@@ -306,70 +310,6 @@
         },
         "true"
       ]
-    },
-    "CogApiUrlHostEmpty": {
-      "Fn::Equals": [
-        {
-          "Ref": "CogApiUrlHost"
-        },
-        ""
-      ]
-    },
-    "CogApiUrlPortEmpty": {
-      "Fn::Equals": [
-        {
-          "Ref": "CogApiUrlPort"
-        },
-        ""
-      ]
-    },
-    "CogTriggerUrlBaseEmpty": {
-      "Fn::Equals": [
-        {
-          "Ref": "CogTriggerUrlBase"
-        },
-        ""
-      ]
-    },
-    "CogTriggerUrlHostEmpty": {
-      "Fn::Equals": [
-        {
-          "Ref": "CogTriggerUrlHost"
-        },
-        ""
-      ]
-    },
-    "CogTriggerUrlPortEmpty": {
-      "Fn::Equals": [
-        {
-          "Ref": "CogTriggerUrlPort"
-        },
-        ""
-      ]
-    },
-    "CogServiceUrlBaseEmpty": {
-      "Fn::Equals": [
-        {
-          "Ref": "CogServiceUrlBase"
-        },
-        ""
-      ]
-    },
-    "CogServiceUrlHostEmpty": {
-      "Fn::Equals": [
-        {
-          "Ref": "CogServiceUrlHost"
-        },
-        ""
-      ]
-    },
-    "CogServiceUrlPortEmpty": {
-      "Fn::Equals": [
-        {
-          "Ref": "CogServiceUrlPort"
-        },
-        ""
-      ]
     }
   },
   "Metadata": {
@@ -385,6 +325,15 @@
             "KeyName",
             "InstanceType",
             "ImageId"
+          ]
+        },
+        {
+          "Label": {
+            "default": "HTTP Configuration"
+          },
+          "Parameters": [
+            "CogDnsname",
+            "SslCertificateArn"
           ]
         },
         {
@@ -449,21 +398,6 @@
           "Parameters": [
             "CogAllowSelfRegistration"
           ]
-        },
-        {
-          "Label": {
-            "default": "Cog Config (Host Settings)"
-          },
-          "Parameters": [
-            "CogApiUrlHost",
-            "CogApiUrlPort",
-            "CogTriggerUrlBase",
-            "CogTriggerUrlHost",
-            "CogTriggerUrlPort",
-            "CogServiceUrlBase",
-            "CogServiceUrlHost",
-            "CogServiceUrlPort"
-          ]
         }
       ],
       "ParameterLabels": {
@@ -499,6 +433,12 @@
         },
         "RdsMultiAZ": {
           "default": "Multi-AZ HA"
+        },
+        "CogDnsname": {
+          "default": "DNS Hostname"
+        },
+        "SslCertificateArn": {
+          "default": "SSL Certificate"
         },
         "CogImage": {
           "default": "* Cog Docker Image"
@@ -544,30 +484,6 @@
         },
         "CogBootstrapEmailAddress": {
           "default": "Email Address"
-        },
-        "CogApiUrlHost": {
-          "default": "API Host"
-        },
-        "CogApiUrlPort": {
-          "default": "API Port"
-        },
-        "CogTriggerUrlBase": {
-          "default": "Trigger Base"
-        },
-        "CogTriggerUrlHost": {
-          "default": "Trigger Host"
-        },
-        "CogTriggerUrlPort": {
-          "default": "Trigger Port"
-        },
-        "CogServiceUrlBase": {
-          "default": "Service Base"
-        },
-        "CogServiceUrlHost": {
-          "default": "Service Host"
-        },
-        "CogServiceUrlPort": {
-          "default": "Service Port"
         }
       }
     }
@@ -628,6 +544,7 @@
     },
     "CogElbIngressAPI": {
       "Type": "AWS::EC2::SecurityGroupIngress",
+      "Condition": "SslDisabled",
       "Properties": {
         "GroupId": {
           "Ref": "CogElbSecurityGroup"
@@ -638,8 +555,22 @@
         "CidrIp": "0.0.0.0/0"
       }
     },
-    "CogElbIngressServices": {
+    "CogElbIngressAPISsl": {
       "Type": "AWS::EC2::SecurityGroupIngress",
+      "Condition": "SslEnabled",
+      "Properties": {
+        "GroupId": {
+          "Ref": "CogElbSecurityGroup"
+        },
+        "FromPort": 443,
+        "ToPort": 443,
+        "IpProtocol": 6,
+        "CidrIp": "0.0.0.0/0"
+      }
+    },
+    "CogElbIngressTriggers": {
+      "Type": "AWS::EC2::SecurityGroupIngress",
+      "Condition": "SslDisabled",
       "Properties": {
         "GroupId": {
           "Ref": "CogElbSecurityGroup"
@@ -650,8 +581,22 @@
         "CidrIp": "0.0.0.0/0"
       }
     },
-    "CogElbIngressTriggers": {
+    "CogElbIngressTriggersSsl": {
       "Type": "AWS::EC2::SecurityGroupIngress",
+      "Condition": "SslEnabled",
+      "Properties": {
+        "GroupId": {
+          "Ref": "CogElbSecurityGroup"
+        },
+        "FromPort": 5001,
+        "ToPort": 5001,
+        "IpProtocol": 6,
+        "CidrIp": "0.0.0.0/0"
+      }
+    },
+    "CogElbIngressServices": {
+      "Type": "AWS::EC2::SecurityGroupIngress",
+      "Condition": "SslDisabled",
       "Properties": {
         "GroupId": {
           "Ref": "CogElbSecurityGroup"
@@ -662,49 +607,221 @@
         "CidrIp": "0.0.0.0/0"
       }
     },
-    "CogElb": {
-      "Type": "AWS::ElasticLoadBalancing::LoadBalancer",
+    "CogElbIngressServicesSsl": {
+      "Type": "AWS::EC2::SecurityGroupIngress",
+      "Condition": "SslEnabled",
       "Properties": {
-        "CrossZone": true,
-        "HealthCheck": {
-          "Target": "HTTP:4000/v1/bootstrap",
-          "HealthyThreshold": "3",
-          "UnhealthyThreshold": "5",
-          "Interval": "10",
-          "Timeout": "5"
+        "GroupId": {
+          "Ref": "CogElbSecurityGroup"
         },
-        "Subnets": {
-          "Ref": "SubnetIds"
-        },
+        "FromPort": 5002,
+        "ToPort": 5002,
+        "IpProtocol": 6,
+        "CidrIp": "0.0.0.0/0"
+      }
+    },
+    "CogElbV2": {
+      "Type": "AWS::ElasticLoadBalancingV2::LoadBalancer",
+      "Properties": {
+        "Name": "cog",
         "SecurityGroups": [
           {
             "Ref": "CogElbSecurityGroup"
           }
         ],
-        "Listeners": [
-          {
-            "InstancePort": "4000",
-            "InstanceProtocol": "HTTP",
-            "LoadBalancerPort": "80",
-            "Protocol": "HTTP"
-          },
-          {
-            "InstancePort": "4001",
-            "InstanceProtocol": "HTTP",
-            "LoadBalancerPort": "4001",
-            "Protocol": "HTTP"
-          },
-          {
-            "InstancePort": "4002",
-            "InstanceProtocol": "HTTP",
-            "LoadBalancerPort": "4002",
-            "Protocol": "HTTP"
-          }
-        ],
+        "Subnets": {
+          "Ref": "SubnetIds"
+        },
         "Tags": [
           {
             "Key": "Name",
             "Value": "cog"
+          }
+        ]
+      }
+    },
+    "CogElbApiTarget": {
+      "Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
+      "Properties": {
+        "Name": "CogApiEndpoint",
+        "VpcId": {
+          "Ref": "VpcId"
+        },
+        "Protocol": "HTTP",
+        "Port": 4000,
+        "HealthCheckPort": 4000,
+        "HealthCheckPath": "/v1/bootstrap",
+        "HealthyThresholdCount": 3,
+        "UnhealthyThresholdCount": 6,
+        "HealthCheckTimeoutSeconds": 5,
+        "HealthCheckIntervalSeconds": 10
+      }
+    },
+    "CogElbApiListener": {
+      "Type": "AWS::ElasticLoadBalancingV2::Listener",
+      "Condition": "SslDisabled",
+      "Properties": {
+        "LoadBalancerArn": {
+          "Ref": "CogElbV2"
+        },
+        "Port": 80,
+        "Protocol": "HTTP",
+        "DefaultActions": [
+          {
+            "Type": "forward",
+            "TargetGroupArn": {
+              "Ref": "CogElbApiTarget"
+            }
+          }
+        ]
+      }
+    },
+    "CogElbApiListenerSsl": {
+      "Type": "AWS::ElasticLoadBalancingV2::Listener",
+      "Condition": "SslEnabled",
+      "Properties": {
+        "LoadBalancerArn": {
+          "Ref": "CogElbV2"
+        },
+        "Port": 443,
+        "Protocol": "HTTPS",
+        "Certificates": [
+          {
+            "CertificateArn": {
+              "Ref": "SslCertificateArn"
+            }
+          }
+        ],
+        "DefaultActions": [
+          {
+            "Type": "forward",
+            "TargetGroupArn": {
+              "Ref": "CogElbApiTarget"
+            }
+          }
+        ]
+      }
+    },
+    "CogElbTriggerTarget": {
+      "Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
+      "Properties": {
+        "Name": "CogTriggerEndpoint",
+        "VpcId": {
+          "Ref": "VpcId"
+        },
+        "Protocol": "HTTP",
+        "Port": 4001,
+        "HealthCheckPort": 4000,
+        "HealthCheckPath": "/v1/bootstrap",
+        "HealthyThresholdCount": 3,
+        "UnhealthyThresholdCount": 6,
+        "HealthCheckTimeoutSeconds": 5,
+        "HealthCheckIntervalSeconds": 10
+      }
+    },
+    "CogElbTriggerListener": {
+      "Type": "AWS::ElasticLoadBalancingV2::Listener",
+      "Condition": "SslDisabled",
+      "Properties": {
+        "LoadBalancerArn": {
+          "Ref": "CogElbV2"
+        },
+        "Port": 4001,
+        "Protocol": "HTTP",
+        "DefaultActions": [
+          {
+            "Type": "forward",
+            "TargetGroupArn": {
+              "Ref": "CogElbTriggerTarget"
+            }
+          }
+        ]
+      }
+    },
+    "CogElbTriggerListenerSSL": {
+      "Type": "AWS::ElasticLoadBalancingV2::Listener",
+      "Condition": "SslEnabled",
+      "Properties": {
+        "LoadBalancerArn": {
+          "Ref": "CogElbV2"
+        },
+        "Port": 5001,
+        "Protocol": "HTTPS",
+        "Certificates": [
+          {
+            "CertificateArn": {
+              "Ref": "SslCertificateArn"
+            }
+          }
+        ],
+        "DefaultActions": [
+          {
+            "Type": "forward",
+            "TargetGroupArn": {
+              "Ref": "CogElbTriggerTarget"
+            }
+          }
+        ]
+      }
+    },
+    "CogElbServiceTarget": {
+      "Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
+      "Properties": {
+        "Name": "CogServiceEndpoint",
+        "VpcId": {
+          "Ref": "VpcId"
+        },
+        "Protocol": "HTTP",
+        "Port": 4002,
+        "HealthCheckPort": 4000,
+        "HealthCheckPath": "/v1/bootstrap",
+        "HealthyThresholdCount": 3,
+        "UnhealthyThresholdCount": 6,
+        "HealthCheckTimeoutSeconds": 5,
+        "HealthCheckIntervalSeconds": 10
+      }
+    },
+    "CogElbServiceListener": {
+      "Type": "AWS::ElasticLoadBalancingV2::Listener",
+      "Condition": "SslDisabled",
+      "Properties": {
+        "LoadBalancerArn": {
+          "Ref": "CogElbV2"
+        },
+        "Port": 4002,
+        "Protocol": "HTTP",
+        "DefaultActions": [
+          {
+            "Type": "forward",
+            "TargetGroupArn": {
+              "Ref": "CogElbServiceTarget"
+            }
+          }
+        ]
+      }
+    },
+    "CogElbServiceListenerSsl": {
+      "Type": "AWS::ElasticLoadBalancingV2::Listener",
+      "Condition": "SslEnabled",
+      "Properties": {
+        "LoadBalancerArn": {
+          "Ref": "CogElbV2"
+        },
+        "Port": 5002,
+        "Protocol": "HTTPS",
+        "Certificates": [
+          {
+            "CertificateArn": {
+              "Ref": "SslCertificateArn"
+            }
+          }
+        ],
+        "DefaultActions": [
+          {
+            "Type": "forward",
+            "TargetGroupArn": {
+              "Ref": "CogElbServiceTarget"
+            }
           }
         ]
       }
@@ -887,9 +1004,15 @@
         "LaunchConfigurationName": {
           "Ref": "CogAsgLaunchConfig"
         },
-        "LoadBalancerNames": [
+        "TargetGroupARNs": [
           {
-            "Ref": "CogElb"
+            "Ref": "CogElbApiTarget"
+          },
+          {
+            "Ref": "CogElbTriggerTarget"
+          },
+          {
+            "Ref": "CogElbServiceTarget"
           }
         ],
         "MaxSize": 1,
@@ -1076,77 +1199,100 @@
                           ""
                         ]
                       },
-                      "COG_API_URL_HOST=",
+                      "COG_API_URL_BASE=",
                       {
                         "Fn::If": [
-                          "CogApiUrlHostEmpty",
+                          "SslEnabled",
+                          "https",
+                          "http"
+                        ]
+                      },
+                      "://",
+                      {
+                        "Fn::If": [
+                          "CogDnsnameExists",
                           {
-                            "Fn::GetAtt": [
-                              "CogElb",
-                              "DNSName"
-                            ]
+                            "Ref": "CogDnsname"
                           },
                           {
-                            "Ref": "CogApiUrlHost"
+                            "Fn::GetAtt": [
+                              "CogElbV2",
+                              "DNSName"
+                            ]
                           }
                         ]
                       },
-                      "\n",
-                      "COG_API_URL_PORT=",
-                      {
-                        "Ref": "CogApiUrlPort"
-                      },
-                      "\n",
-                      "COG_SERVICE_URL_BASE=",
-                      {
-                        "Ref": "CogServiceUrlBase"
-                      },
-                      "\n",
-                      "COG_SERVICE_URL_HOST=",
+                      ":",
                       {
                         "Fn::If": [
-                          "CogServiceUrlHostEmpty",
-                          {
-                            "Fn::GetAtt": [
-                              "CogElb",
-                              "DNSName"
-                            ]
-                          },
-                          {
-                            "Ref": "CogServiceUrlHost"
-                          }
+                          "SslEnabled",
+                          443,
+                          80
                         ]
-                      },
-                      "\n",
-                      "COG_SERVICE_URL_PORT=",
-                      {
-                        "Ref": "CogServiceUrlPort"
                       },
                       "\n",
                       "COG_TRIGGER_URL_BASE=",
                       {
-                        "Ref": "CogTriggerUrlBase"
+                        "Fn::If": [
+                          "SslEnabled",
+                          "https",
+                          "http"
+                        ]
                       },
-                      "\n",
-                      "COG_TRIGGER_URL_HOST=",
+                      "://",
                       {
                         "Fn::If": [
-                          "CogTriggerUrlHostEmpty",
+                          "CogDnsnameExists",
                           {
-                            "Fn::GetAtt": [
-                              "CogElb",
-                              "DNSName"
-                            ]
+                            "Ref": "CogDnsname"
                           },
                           {
-                            "Ref": "CogTriggerUrlHost"
+                            "Fn::GetAtt": [
+                              "CogElbV2",
+                              "DNSName"
+                            ]
                           }
                         ]
                       },
-                      "\n",
-                      "COG_TRIGGER_URL_PORT=",
+                      ":",
                       {
-                        "Ref": "CogTriggerUrlPort"
+                        "Fn::If": [
+                          "SslEnabled",
+                          5001,
+                          4001
+                        ]
+                      },
+                      "\n",
+                      "COG_SERVICE_URL_BASE=",
+                      {
+                        "Fn::If": [
+                          "SslEnabled",
+                          "https",
+                          "http"
+                        ]
+                      },
+                      "://",
+                      {
+                        "Fn::If": [
+                          "CogDnsnameExists",
+                          {
+                            "Ref": "CogDnsname"
+                          },
+                          {
+                            "Fn::GetAtt": [
+                              "CogElbV2",
+                              "DNSName"
+                            ]
+                          }
+                        ]
+                      },
+                      ":",
+                      {
+                        "Fn::If": [
+                          "SslEnabled",
+                          5002,
+                          4002
+                        ]
                       },
                       "\n",
                       "RELAY_ID=",
@@ -1172,7 +1318,7 @@
                 "group": "root"
               },
               "/opt/cog/docker-compose.yml": {
-                "content": "version: \"2\"\nservices:\n  cog:\n    image: \"${COG_IMAGE}\"\n    environment:\n      - COG_MQTT_HOST=0.0.0.0\n      - DATABASE_URL=${DATABASE_URL}\n      - COG_DB_SSL=${COG_DB_SSL}\n      - SLACK_API_TOKEN=${SLACK_API_TOKEN}\n      - COG_BOOTSTRAP_USERNAME=${COG_BOOTSTRAP_USERNAME}\n      - COG_BOOTSTRAP_PASSWORD=${COG_BOOTSTRAP_PASSWORD}\n      - COG_BOOTSTRAP_EMAIL_ADDRESS=${COG_BOOTSTRAP_EMAIL_ADDRESS}\n      - COG_BOOTSTRAP_FIRST_NAME=${COG_BOOTSTRAP_FIRST_NAME}\n      - COG_BOOTSTRAP_LAST_NAME=${COG_BOOTSTRAP_LAST_NAME}\n      - COG_API_URL_HOST=${COG_API_URL_HOST}\n      - COG_API_URL_PORT=${COG_API_URL_PORT}\n      - COG_TRIGGER_URL_BASE=${COG_TRIGGER_URL_BASE}\n      - COG_TRIGGER_URL_HOST=${COG_TRIGGER_URL_HOST}\n      - COG_TRIGGER_URL_PORT=${COG_TRIGGER_URL_PORT}\n      - COG_SERVICE_URL_BASE=${COG_SERVICE_URL_BASE}\n      - COG_SERVICE_URL_HOST=${COG_SERVICE_URL_HOST}\n      - COG_SERVICE_URL_PORT=${COG_SERVICE_URL_PORT}\n      - RELAY_ID=${RELAY_ID}\n      - RELAY_COG_TOKEN=${RELAY_COG_TOKEN}\n      - COG_ALLOW_SELF_REGISTRATION=${COG_ALLOW_SELF_REGISTRATION}\n    ports:\n      - 1883:1883\n      - 4000:4000\n      - 4001:4001\n      - 4002:4002\n    restart: always\n    entrypoint: /home/operable/cog/scripts/docker-start\n  relay:\n    image: \"${RELAY_IMAGE}\"\n    privileged: true\n    volumes:\n      - /var/run/docker.sock:/var/run/docker.sock\n    environment:\n      - RELAY_ID=${RELAY_ID}\n      - RELAY_COG_TOKEN=${RELAY_COG_TOKEN}\n      - RELAY_COG_REFRESH_INTERVAL=30s\n      - RELAY_DOCKER_CLEAN_INTERVAL=1m\n      - RELAY_COG_HOST=cog\n      - RELAY_MANAGED_DYNAMIC_CONFIG=true\n      - RELAY_DYNAMIC_CONFIG_ROOT=/tmp/bundle_configs\n    links:\n      - cog\n    restart: always\n    entrypoint: /usr/local/bin/relay\n",
+                "content": "version: \"2\"\nservices:\n  cog:\n    image: \"${COG_IMAGE}\"\n    environment:\n      - COG_MQTT_HOST=0.0.0.0\n      - DATABASE_URL=${DATABASE_URL}\n      - COG_DB_SSL=${COG_DB_SSL}\n      - SLACK_API_TOKEN=${SLACK_API_TOKEN}\n      - COG_BOOTSTRAP_USERNAME=${COG_BOOTSTRAP_USERNAME}\n      - COG_BOOTSTRAP_PASSWORD=${COG_BOOTSTRAP_PASSWORD}\n      - COG_BOOTSTRAP_EMAIL_ADDRESS=${COG_BOOTSTRAP_EMAIL_ADDRESS}\n      - COG_BOOTSTRAP_FIRST_NAME=${COG_BOOTSTRAP_FIRST_NAME}\n      - COG_BOOTSTRAP_LAST_NAME=${COG_BOOTSTRAP_LAST_NAME}\n      - COG_API_URL_BASE=${COG_API_URL_BASE}\n      - COG_TRIGGER_URL_BASE=${COG_TRIGGER_URL_BASE}\n      - COG_SERVICE_URL_BASE=${COG_SERVICE_URL_BASE}\n      - RELAY_ID=${RELAY_ID}\n      - RELAY_COG_TOKEN=${RELAY_COG_TOKEN}\n      - COG_ALLOW_SELF_REGISTRATION=${COG_ALLOW_SELF_REGISTRATION}\n    ports:\n      - 1883:1883\n      - 4000:4000\n      - 4001:4001\n      - 4002:4002\n    restart: always\n    entrypoint: /home/operable/cog/scripts/docker-start\n  relay:\n    image: \"${RELAY_IMAGE}\"\n    privileged: true\n    volumes:\n      - /var/run/docker.sock:/var/run/docker.sock\n    environment:\n      - RELAY_ID=${RELAY_ID}\n      - RELAY_COG_TOKEN=${RELAY_COG_TOKEN}\n      - RELAY_COG_REFRESH_INTERVAL=30s\n      - RELAY_DOCKER_CLEAN_INTERVAL=1m\n      - RELAY_COG_HOST=cog\n      - RELAY_MANAGED_DYNAMIC_CONFIG=true\n      - RELAY_DYNAMIC_CONFIG_ROOT=/tmp/bundle_configs\n    links:\n      - cog\n    restart: always\n    entrypoint: /usr/local/bin/relay\n",
                 "mode": "0600",
                 "owner": "root",
                 "group": "root"
@@ -1330,7 +1476,7 @@
     "CogElbHostname": {
       "Value": {
         "Fn::GetAtt": [
-          "CogElb",
+          "CogElbV2",
           "DNSName"
         ]
       }

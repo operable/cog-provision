@@ -33,79 +33,98 @@ resource "CogElbSecurityGroup",
     ]
   }
 
-resource "CogElbEgressAny", :Type => "AWS::EC2::SecurityGroupEgress", :Properties => {
-  :GroupId => ref("CogElbSecurityGroup"),
-  :FromPort => -1,
-  :ToPort => -1,
-  :IpProtocol => -1,
-  :CidrIp => "0.0.0.0/0"
-}
-
-resource "CogElbIngressICMP", :Type => "AWS::EC2::SecurityGroupIngress", :Properties => {
-  :GroupId => ref("CogElbSecurityGroup"),
-  :FromPort => -1,
-  :ToPort => -1,
-  :IpProtocol => 1,
-  :CidrIp => "0.0.0.0/0"
-}
-
-resource "CogElbIngressAPI", :Type => "AWS::EC2::SecurityGroupIngress", :Properties => {
-  :GroupId => ref("CogElbSecurityGroup"),
-  :FromPort => 80,
-  :ToPort => 80,
-  :IpProtocol => 6,
-  :CidrIp => "0.0.0.0/0"
-}
-
-resource "CogElbIngressServices", :Type => "AWS::EC2::SecurityGroupIngress", :Properties => {
-  :GroupId => ref("CogElbSecurityGroup"),
-  :FromPort => 4001,
-  :ToPort => 4001,
-  :IpProtocol => 6,
-  :CidrIp => "0.0.0.0/0"
-}
-
-resource "CogElbIngressTriggers", :Type => "AWS::EC2::SecurityGroupIngress", :Properties => {
-  :GroupId => ref("CogElbSecurityGroup"),
-  :FromPort => 4002,
-  :ToPort => 4002,
-  :IpProtocol => 6,
-  :CidrIp => "0.0.0.0/0"
-}
-
-resource "CogElb",
-  :Type => "AWS::ElasticLoadBalancing::LoadBalancer",
+resource "CogElbEgressAny",
+  :Type => "AWS::EC2::SecurityGroupEgress",
   :Properties => {
-    :CrossZone => true,
-    :HealthCheck => {
-      :Target => "HTTP:4000/v1/bootstrap",
-      :HealthyThreshold => "3",
-      :UnhealthyThreshold => "5",
-      :Interval => "10",
-      :Timeout => "5"
-    },
-    :Subnets => ref("SubnetIds"),
+    :GroupId => ref("CogElbSecurityGroup"),
+    :FromPort => -1,
+    :ToPort => -1,
+    :IpProtocol => -1,
+    :CidrIp => "0.0.0.0/0"
+  }
+
+resource "CogElbIngressICMP",
+  :Type => "AWS::EC2::SecurityGroupIngress",
+  :Properties => {
+    :GroupId => ref("CogElbSecurityGroup"),
+    :FromPort => -1,
+    :ToPort => -1,
+    :IpProtocol => 1,
+    :CidrIp => "0.0.0.0/0"
+  }
+
+resource "CogElbIngressAPI",
+  :Type => "AWS::EC2::SecurityGroupIngress",
+  :Condition => "SslDisabled",
+  :Properties => {
+    :GroupId => ref("CogElbSecurityGroup"),
+    :FromPort => 80,
+    :ToPort => 80,
+    :IpProtocol => 6,
+    :CidrIp => "0.0.0.0/0"
+  }
+
+resource "CogElbIngressAPISsl",
+  :Type => "AWS::EC2::SecurityGroupIngress",
+  :Condition => "SslEnabled",
+  :Properties => {
+    :GroupId => ref("CogElbSecurityGroup"),
+    :FromPort => 443,
+    :ToPort => 443,
+    :IpProtocol => 6,
+    :CidrIp => "0.0.0.0/0"
+  }
+
+resource "CogElbIngressTriggers",
+  :Type => "AWS::EC2::SecurityGroupIngress",
+  :Condition => "SslDisabled",
+  :Properties => {
+    :GroupId => ref("CogElbSecurityGroup"),
+    :FromPort => 4001,
+    :ToPort => 4001,
+    :IpProtocol => 6,
+    :CidrIp => "0.0.0.0/0"
+  }
+
+resource "CogElbIngressTriggersSsl",
+  :Type => "AWS::EC2::SecurityGroupIngress",
+  :Condition => "SslEnabled",
+  :Properties => {
+    :GroupId => ref("CogElbSecurityGroup"),
+    :FromPort => 5001,
+    :ToPort => 5001,
+    :IpProtocol => 6,
+    :CidrIp => "0.0.0.0/0"
+  }
+
+resource "CogElbIngressServices",
+  :Type => "AWS::EC2::SecurityGroupIngress",
+  :Condition => "SslDisabled",
+  :Properties => {
+    :GroupId => ref("CogElbSecurityGroup"),
+    :FromPort => 4002,
+    :ToPort => 4002,
+    :IpProtocol => 6,
+    :CidrIp => "0.0.0.0/0"
+  }
+
+resource "CogElbIngressServicesSsl",
+  :Type => "AWS::EC2::SecurityGroupIngress",
+  :Condition => "SslEnabled",
+  :Properties => {
+    :GroupId => ref("CogElbSecurityGroup"),
+    :FromPort => 5002,
+    :ToPort => 5002,
+    :IpProtocol => 6,
+    :CidrIp => "0.0.0.0/0"
+  }
+
+resource "CogElbV2",
+  :Type => "AWS::ElasticLoadBalancingV2::LoadBalancer",
+  :Properties => {
+    :Name => "cog",
     :SecurityGroups => [ ref("CogElbSecurityGroup") ],
-    :Listeners => [
-      {
-        :InstancePort => "4000",
-        :InstanceProtocol => "HTTP",
-        :LoadBalancerPort => "80",
-        :Protocol => "HTTP"
-      },
-      {
-        :InstancePort => "4001",
-        :InstanceProtocol => "HTTP",
-        :LoadBalancerPort => "4001",
-        :Protocol => "HTTP"
-      },
-      {
-        :InstancePort => "4002",
-        :InstanceProtocol => "HTTP",
-        :LoadBalancerPort => "4002",
-        :Protocol => "HTTP"
-      }
-    ],
+    :Subnets => ref("SubnetIds"),
     :Tags => [
       {
         :Key => "Name",
@@ -114,7 +133,145 @@ resource "CogElb",
     ]
   }
 
-output "CogElbHostname", :Value => get_att("CogElb", "DNSName")
+resource "CogElbApiTarget",
+  :Type => "AWS::ElasticLoadBalancingV2::TargetGroup",
+  :Properties => {
+    :Name => "CogApiEndpoint",
+    :VpcId => ref("VpcId"),
+    :Protocol => "HTTP",
+    :Port => 4000,
+    :HealthCheckPort => 4000,
+    :HealthCheckPath => "/v1/bootstrap",
+    :HealthyThresholdCount => 3,
+    :UnhealthyThresholdCount => 6,
+    :HealthCheckTimeoutSeconds => 5,
+    :HealthCheckIntervalSeconds => 10
+  }
+
+resource "CogElbApiListener",
+  :Type => "AWS::ElasticLoadBalancingV2::Listener",
+  :Condition => "SslDisabled",
+  :Properties => {
+    :LoadBalancerArn => ref("CogElbV2"),
+    :Port => 80,
+    :Protocol => "HTTP",
+    :DefaultActions => [
+      {
+        :Type => "forward",
+        :TargetGroupArn => ref("CogElbApiTarget")
+      }
+    ]
+  }
+
+resource "CogElbApiListenerSsl",
+  :Type => "AWS::ElasticLoadBalancingV2::Listener",
+  :Condition => "SslEnabled",
+  :Properties => {
+    :LoadBalancerArn => ref("CogElbV2"),
+    :Port => 443,
+    :Protocol => "HTTPS",
+    :Certificates => [{ :CertificateArn => ref("SslCertificateArn") }],
+    :DefaultActions => [
+      {
+        :Type => "forward",
+        :TargetGroupArn => ref("CogElbApiTarget")
+      }
+    ]
+  }
+
+resource "CogElbTriggerTarget",
+  :Type => "AWS::ElasticLoadBalancingV2::TargetGroup",
+  :Properties => {
+    :Name => "CogTriggerEndpoint",
+    :VpcId => ref("VpcId"),
+    :Protocol => "HTTP",
+    :Port => 4001,
+    :HealthCheckPort => 4000,
+    :HealthCheckPath => "/v1/bootstrap",
+    :HealthyThresholdCount => 3,
+    :UnhealthyThresholdCount => 6,
+    :HealthCheckTimeoutSeconds => 5,
+    :HealthCheckIntervalSeconds => 10
+  }
+
+resource "CogElbTriggerListener",
+  :Type => "AWS::ElasticLoadBalancingV2::Listener",
+  :Condition => "SslDisabled",
+  :Properties => {
+    :LoadBalancerArn => ref("CogElbV2"),
+    :Port => 4001,
+    :Protocol => "HTTP",
+    :DefaultActions => [
+      {
+        :Type => "forward",
+        :TargetGroupArn => ref("CogElbTriggerTarget")
+      }
+    ]
+  }
+
+resource "CogElbTriggerListenerSSL",
+  :Type => "AWS::ElasticLoadBalancingV2::Listener",
+  :Condition => "SslEnabled",
+  :Properties => {
+    :LoadBalancerArn => ref("CogElbV2"),
+    :Port => 5001,
+    :Protocol => "HTTPS",
+    :Certificates => [{ :CertificateArn => ref("SslCertificateArn") }],
+    :DefaultActions => [
+      {
+        :Type => "forward",
+        :TargetGroupArn => ref("CogElbTriggerTarget")
+      }
+    ]
+  }
+
+resource "CogElbServiceTarget",
+  :Type => "AWS::ElasticLoadBalancingV2::TargetGroup",
+  :Properties => {
+    :Name => "CogServiceEndpoint",
+    :VpcId => ref("VpcId"),
+    :Protocol => "HTTP",
+    :Port => 4002,
+    :HealthCheckPort => 4000,
+    :HealthCheckPath => "/v1/bootstrap",
+    :HealthyThresholdCount => 3,
+    :UnhealthyThresholdCount => 6,
+    :HealthCheckTimeoutSeconds => 5,
+    :HealthCheckIntervalSeconds => 10
+  }
+
+resource "CogElbServiceListener",
+  :Type => "AWS::ElasticLoadBalancingV2::Listener",
+  :Condition => "SslDisabled",
+  :Properties => {
+    :LoadBalancerArn => ref("CogElbV2"),
+    :Port => 4002,
+    :Protocol => "HTTP",
+    :DefaultActions => [
+      {
+        :Type => "forward",
+        :TargetGroupArn => ref("CogElbServiceTarget")
+      }
+    ]
+  }
+
+resource "CogElbServiceListenerSsl",
+  :Type => "AWS::ElasticLoadBalancingV2::Listener",
+  :Condition => "SslEnabled",
+  :Properties => {
+    :LoadBalancerArn => ref("CogElbV2"),
+    :Port => 5002,
+    :Protocol => "HTTPS",
+    :Certificates => [{ :CertificateArn => ref("SslCertificateArn") }],
+    :DefaultActions => [
+      {
+        :Type => "forward",
+        :TargetGroupArn => ref("CogElbServiceTarget")
+      }
+    ]
+  }
+
+output "CogElbHostname", :Value => get_att("CogElbV2", "DNSName")
 
 # ---------------------------------------------------------------------------
 # Instance Configuration
@@ -225,7 +382,11 @@ resource "CogAsg",
     :HealthCheckType => "EC2", # ELB ...
     :HealthCheckGracePeriod => 300,
     :LaunchConfigurationName => ref("CogAsgLaunchConfig"),
-    :LoadBalancerNames => [ ref("CogElb") ],
+    :TargetGroupARNs => [
+      ref("CogElbApiTarget"),
+      ref("CogElbTriggerTarget"),
+      ref("CogElbServiceTarget")
+    ],
     :MaxSize => 1,
     :MinSize => 1
 
@@ -284,23 +445,36 @@ resource "CogAsgLaunchConfig",
                   "COG_BOOTSTRAP_PASSWORD=", ref("CogBootstrapPassword"), "\n",
                   "COG_BOOTSTRAP_USERNAME=", ref("CogBootstrapUsername"), "\n"),
                 ""),
-              "COG_API_URL_HOST=",
-                fn_if("CogApiUrlHostEmpty",
-                  get_att("CogElb", "DNSName"),
-                  ref("CogApiUrlHost")), "\n",
-              "COG_API_URL_PORT=", ref("CogApiUrlPort"), "\n",
-              "COG_SERVICE_URL_BASE=", ref("CogServiceUrlBase"), "\n",
-              "COG_SERVICE_URL_HOST=",
-                fn_if("CogServiceUrlHostEmpty",
-                  get_att("CogElb", "DNSName"),
-                  ref("CogServiceUrlHost")), "\n",
-              "COG_SERVICE_URL_PORT=", ref("CogServiceUrlPort"), "\n",
-              "COG_TRIGGER_URL_BASE=", ref("CogTriggerUrlBase"), "\n",
-              "COG_TRIGGER_URL_HOST=",
-                fn_if("CogTriggerUrlHostEmpty",
-                  get_att("CogElb", "DNSName"),
-                  ref("CogTriggerUrlHost")), "\n",
-              "COG_TRIGGER_URL_PORT=", ref("CogTriggerUrlPort"), "\n",
+              "COG_API_URL_BASE=",
+                fn_if("SslEnabled", "https", "http"), # scheme
+                "://",
+                fn_if("CogDnsnameExists",             # hostname
+                  ref("CogDnsname"),
+                  get_att("CogElbV2", "DNSName")
+                ),
+                ":",
+                fn_if("SslEnabled", 443, 80),         # port
+                "\n",
+              "COG_TRIGGER_URL_BASE=",
+                fn_if("SslEnabled", "https", "http"), # scheme
+                "://",
+                fn_if("CogDnsnameExists",             # hostname
+                  ref("CogDnsname"),
+                  get_att("CogElbV2", "DNSName")
+                ),
+                ":",
+                fn_if("SslEnabled", 5001, 4001),      # port
+                "\n",
+              "COG_SERVICE_URL_BASE=",
+                fn_if("SslEnabled", "https", "http"), # scheme
+                "://",
+                fn_if("CogDnsnameExists",             # hostname
+                  ref("CogDnsname"),
+                  get_att("CogElbV2", "DNSName")
+                ),
+                ":",
+                fn_if("SslEnabled", 5002, 4002),      # port
+                "\n",
               "RELAY_ID=", ref("RelayId"), "\n",
               "RELAY_IMAGE=", ref("RelayImage"), "\n",
               "RELAY_COG_TOKEN=", ref("RelayCogToken"), "\n"
