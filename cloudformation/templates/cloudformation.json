@@ -8,6 +8,29 @@
       "Default": "",
       "ConstraintDescription": "must be an existing VPC"
     },
+    "ElbSubnetIds": {
+      "Description": "Subnets to use for load balancer - 2 or more required and should usually be public subnets",
+      "Type": "List<AWS::EC2::Subnet::Id>",
+      "Default": "",
+      "ConstraintDescription": "must be a list of VPC subnet IDs"
+    },
+    "InstanceSubnetIds": {
+      "Description": "Subnets to use for Cog host and RDS databases - 2 or more required for multi-AZ RDS",
+      "Type": "List<AWS::EC2::Subnet::Id>",
+      "Default": "",
+      "ConstraintDescription": "must be a list of VPC subnet IDs"
+    },
+    "CogBucketName": {
+      "Description": "Existing S3 bucket to use for Cog data - leave empty to create a new bucket automatically",
+      "Type": "String"
+    },
+    "CogBucketPrefix": {
+      "Description": "Prefix path within S3 bucket for Cog data",
+      "Type": "String",
+      "Default": "/cog/",
+      "AllowedPattern": "^/.*/$",
+      "ConstraintDescription": "must begin and end with /"
+    },
     "KeyName": {
       "Description": "Name of an existing EC2 KeyPair to enable SSH access",
       "Type": "AWS::EC2::KeyPair::KeyName",
@@ -24,18 +47,6 @@
       "Type": "String",
       "Default": "ami-81365496",
       "ConstraintDescription": "must be an Ubuntu 16.04 LTS HVM/EBS AMI"
-    },
-    "ElbSubnetIds": {
-      "Description": "Subnets to use for load balancer - 2 or more required and should usually be public subnets",
-      "Type": "List<AWS::EC2::Subnet::Id>",
-      "Default": "",
-      "ConstraintDescription": "must be a list of VPC subnet IDs"
-    },
-    "InstanceSubnetIds": {
-      "Description": "Subnets to use for Cog host and RDS databases - 2 or more required for multi-AZ RDS",
-      "Type": "List<AWS::EC2::Subnet::Id>",
-      "Default": "",
-      "ConstraintDescription": "must be a list of VPC subnet IDs"
     },
     "CogDnsname": {
       "Description": "DNS hostname to use for Cog APIs - defaults to ELB DNS name if not set",
@@ -181,6 +192,26 @@
     }
   },
   "Conditions": {
+    "CogBucketNameEmpty": {
+      "Fn::Equals": [
+        {
+          "Ref": "CogBucketName"
+        },
+        ""
+      ]
+    },
+    "CogBucketNameExists": {
+      "Fn::Not": [
+        {
+          "Fn::Equals": [
+            {
+              "Ref": "CogBucketName"
+            },
+            ""
+          ]
+        }
+      ]
+    },
     "CogDnsnameExists": {
       "Fn::Not": [
         {
@@ -329,6 +360,8 @@
             "VpcId",
             "ElbSubnetIds",
             "InstanceSubnetIds",
+            "CogBucketName",
+            "CogBucketPrefix",
             "KeyName",
             "InstanceType",
             "ImageId"
@@ -411,6 +444,18 @@
         "VpcId": {
           "default": "* VPC ID"
         },
+        "ElbSubnetIds": {
+          "default": "* ELB Subnet IDs"
+        },
+        "InstanceSubnetIds": {
+          "default": "* Instance Subnet IDs"
+        },
+        "CogBucketName": {
+          "default": "S3 Bucket"
+        },
+        "CogBucketPrefix": {
+          "default": "S3 Prefix"
+        },
         "KeyName": {
           "default": "* EC2 SSH Keypair"
         },
@@ -419,12 +464,6 @@
         },
         "ImageId": {
           "default": "* EC2 AMI"
-        },
-        "ElbSubnetIds": {
-          "default": "* ELB Subnet IDs"
-        },
-        "InstanceSubnetIds": {
-          "default": "* Instance Subnet IDs"
         },
         "RdsMasterUsername": {
           "default": "RDS Username"
@@ -499,19 +538,164 @@
     }
   },
   "Resources": {
-    "CogBucket": {
-      "Type": "AWS::S3::Bucket",
+    "Time": {
+      "Type": "Custom::TimestampFunction",
       "Properties": {
-        "VersioningConfiguration": {
-          "Status": "Enabled"
+        "ServiceToken": {
+          "Fn::GetAtt": [
+            "TimestampFunction",
+            "Arn"
+          ]
         },
-        "Tags": [
+        "ParamData": [
           {
-            "Key": "Name",
-            "Value": "cog"
+            "Ref": "ImageId"
+          },
+          {
+            "Ref": "InstanceSubnetIds"
+          },
+          {
+            "Ref": "InstanceType"
+          },
+          {
+            "Ref": "KeyName"
+          },
+          {
+            "Ref": "CogDnsname"
+          },
+          {
+            "Ref": "RdsMasterPassword"
+          },
+          {
+            "Ref": "RdsMasterUsername"
+          },
+          {
+            "Fn::GetAtt": [
+              "RdsDatabase",
+              "Endpoint.Address"
+            ]
+          },
+          {
+            "Fn::GetAtt": [
+              "RdsDatabase",
+              "Endpoint.Port"
+            ]
+          },
+          {
+            "Ref": "CogImage"
+          },
+          {
+            "Ref": "RelayImage"
+          },
+          {
+            "Ref": "CogDbSsl"
+          },
+          {
+            "Ref": "DatabaseSource"
+          },
+          {
+            "Ref": "DatabaseUrl"
+          },
+          {
+            "Ref": "SlackApiToken"
+          },
+          {
+            "Ref": "CogAllowSelfRegistration"
+          },
+          {
+            "Ref": "CogBootstrapEmailAddress"
+          },
+          {
+            "Ref": "CogBootstrapFirstName"
+          },
+          {
+            "Ref": "CogBootstrapInstance"
+          },
+          {
+            "Ref": "CogBootstrapLastName"
+          },
+          {
+            "Ref": "CogBootstrapPassword"
+          },
+          {
+            "Ref": "CogBootstrapUsername"
+          },
+          {
+            "Ref": "CogBucketName"
+          },
+          {
+            "Ref": "CogBucketPrefix"
+          },
+          {
+            "Ref": "RelayId"
+          },
+          {
+            "Ref": "RelayCogToken"
           }
         ]
       }
+    },
+    "TimestampFunction": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "Code": {
+          "ZipFile": "\nvar response = require('cfn-response');\n\nexports.handler = function(event, context) {\n    console.log(JSON.stringify(event));\n    response.send(event, context, \"SUCCESS\", { \"Now\": Date.now() })\n};\n"
+        },
+        "Handler": "index.handler",
+        "Role": {
+          "Fn::GetAtt": [
+            "LambdaLogRole",
+            "Arn"
+          ]
+        },
+        "Runtime": "nodejs",
+        "Timeout": 3
+      }
+    },
+    "LambdaLogRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": [
+                  "lambda.amazonaws.com"
+                ]
+              },
+              "Action": [
+                "sts:AssumeRole"
+              ]
+            }
+          ]
+        },
+        "Path": "/",
+        "Policies": [
+          {
+            "PolicyName": "root",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "logs:CreateLogGroup",
+                    "logs:CreateLogStream",
+                    "logs:PutLogEvents"
+                  ],
+                  "Resource": "arn:aws:logs:*:*:*"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "CogBucket": {
+      "Type": "AWS::S3::Bucket",
+      "Condition": "CogBucketNameEmpty"
     },
     "CogElbSecurityGroup": {
       "Type": "AWS::EC2::SecurityGroup",
@@ -554,33 +738,30 @@
     },
     "CogElbIngressAPI": {
       "Type": "AWS::EC2::SecurityGroupIngress",
-      "Condition": "SslDisabled",
       "Properties": {
         "GroupId": {
           "Ref": "CogElbSecurityGroup"
         },
-        "FromPort": 80,
-        "ToPort": 80,
-        "IpProtocol": 6,
-        "CidrIp": "0.0.0.0/0"
-      }
-    },
-    "CogElbIngressAPISsl": {
-      "Type": "AWS::EC2::SecurityGroupIngress",
-      "Condition": "SslEnabled",
-      "Properties": {
-        "GroupId": {
-          "Ref": "CogElbSecurityGroup"
+        "FromPort": {
+          "Fn::If": [
+            "SslEnabled",
+            443,
+            80
+          ]
         },
-        "FromPort": 443,
-        "ToPort": 443,
+        "ToPort": {
+          "Fn::If": [
+            "SslEnabled",
+            443,
+            80
+          ]
+        },
         "IpProtocol": 6,
         "CidrIp": "0.0.0.0/0"
       }
     },
     "CogElbIngressTriggers": {
       "Type": "AWS::EC2::SecurityGroupIngress",
-      "Condition": "SslDisabled",
       "Properties": {
         "GroupId": {
           "Ref": "CogElbSecurityGroup"
@@ -591,41 +772,14 @@
         "CidrIp": "0.0.0.0/0"
       }
     },
-    "CogElbIngressTriggersSsl": {
-      "Type": "AWS::EC2::SecurityGroupIngress",
-      "Condition": "SslEnabled",
-      "Properties": {
-        "GroupId": {
-          "Ref": "CogElbSecurityGroup"
-        },
-        "FromPort": 5001,
-        "ToPort": 5001,
-        "IpProtocol": 6,
-        "CidrIp": "0.0.0.0/0"
-      }
-    },
     "CogElbIngressServices": {
       "Type": "AWS::EC2::SecurityGroupIngress",
-      "Condition": "SslDisabled",
       "Properties": {
         "GroupId": {
           "Ref": "CogElbSecurityGroup"
         },
         "FromPort": 4002,
         "ToPort": 4002,
-        "IpProtocol": 6,
-        "CidrIp": "0.0.0.0/0"
-      }
-    },
-    "CogElbIngressServicesSsl": {
-      "Type": "AWS::EC2::SecurityGroupIngress",
-      "Condition": "SslEnabled",
-      "Properties": {
-        "GroupId": {
-          "Ref": "CogElbSecurityGroup"
-        },
-        "FromPort": 5002,
-        "ToPort": 5002,
         "IpProtocol": 6,
         "CidrIp": "0.0.0.0/0"
       }
@@ -669,39 +823,39 @@
     },
     "CogElbApiListener": {
       "Type": "AWS::ElasticLoadBalancingV2::Listener",
-      "Condition": "SslDisabled",
       "Properties": {
         "LoadBalancerArn": {
           "Ref": "CogElbV2"
         },
-        "Port": 80,
-        "Protocol": "HTTP",
-        "DefaultActions": [
-          {
-            "Type": "forward",
-            "TargetGroupArn": {
-              "Ref": "CogElbApiTarget"
-            }
-          }
-        ]
-      }
-    },
-    "CogElbApiListenerSsl": {
-      "Type": "AWS::ElasticLoadBalancingV2::Listener",
-      "Condition": "SslEnabled",
-      "Properties": {
-        "LoadBalancerArn": {
-          "Ref": "CogElbV2"
+        "Port": {
+          "Fn::If": [
+            "SslEnabled",
+            "443",
+            "80"
+          ]
         },
-        "Port": 443,
-        "Protocol": "HTTPS",
-        "Certificates": [
-          {
-            "CertificateArn": {
-              "Ref": "SslCertificateArn"
+        "Protocol": {
+          "Fn::If": [
+            "SslEnabled",
+            "HTTPS",
+            "HTTP"
+          ]
+        },
+        "Certificates": {
+          "Fn::If": [
+            "SslEnabled",
+            [
+              {
+                "CertificateArn": {
+                  "Ref": "SslCertificateArn"
+                }
+              }
+            ],
+            {
+              "Ref": "AWS::NoValue"
             }
-          }
-        ],
+          ]
+        },
         "DefaultActions": [
           {
             "Type": "forward",
@@ -731,39 +885,33 @@
     },
     "CogElbTriggerListener": {
       "Type": "AWS::ElasticLoadBalancingV2::Listener",
-      "Condition": "SslDisabled",
       "Properties": {
         "LoadBalancerArn": {
           "Ref": "CogElbV2"
         },
         "Port": 4001,
-        "Protocol": "HTTP",
-        "DefaultActions": [
-          {
-            "Type": "forward",
-            "TargetGroupArn": {
-              "Ref": "CogElbTriggerTarget"
-            }
-          }
-        ]
-      }
-    },
-    "CogElbTriggerListenerSSL": {
-      "Type": "AWS::ElasticLoadBalancingV2::Listener",
-      "Condition": "SslEnabled",
-      "Properties": {
-        "LoadBalancerArn": {
-          "Ref": "CogElbV2"
+        "Protocol": {
+          "Fn::If": [
+            "SslEnabled",
+            "HTTPS",
+            "HTTP"
+          ]
         },
-        "Port": 5001,
-        "Protocol": "HTTPS",
-        "Certificates": [
-          {
-            "CertificateArn": {
-              "Ref": "SslCertificateArn"
+        "Certificates": {
+          "Fn::If": [
+            "SslEnabled",
+            [
+              {
+                "CertificateArn": {
+                  "Ref": "SslCertificateArn"
+                }
+              }
+            ],
+            {
+              "Ref": "AWS::NoValue"
             }
-          }
-        ],
+          ]
+        },
         "DefaultActions": [
           {
             "Type": "forward",
@@ -793,39 +941,33 @@
     },
     "CogElbServiceListener": {
       "Type": "AWS::ElasticLoadBalancingV2::Listener",
-      "Condition": "SslDisabled",
       "Properties": {
         "LoadBalancerArn": {
           "Ref": "CogElbV2"
         },
         "Port": 4002,
-        "Protocol": "HTTP",
-        "DefaultActions": [
-          {
-            "Type": "forward",
-            "TargetGroupArn": {
-              "Ref": "CogElbServiceTarget"
-            }
-          }
-        ]
-      }
-    },
-    "CogElbServiceListenerSsl": {
-      "Type": "AWS::ElasticLoadBalancingV2::Listener",
-      "Condition": "SslEnabled",
-      "Properties": {
-        "LoadBalancerArn": {
-          "Ref": "CogElbV2"
+        "Protocol": {
+          "Fn::If": [
+            "SslEnabled",
+            "HTTPS",
+            "HTTP"
+          ]
         },
-        "Port": 5002,
-        "Protocol": "HTTPS",
-        "Certificates": [
-          {
-            "CertificateArn": {
-              "Ref": "SslCertificateArn"
+        "Certificates": {
+          "Fn::If": [
+            "SslEnabled",
+            [
+              {
+                "CertificateArn": {
+                  "Ref": "SslCertificateArn"
+                }
+              }
+            ],
+            {
+              "Ref": "AWS::NoValue"
             }
-          }
-        ],
+          ]
+        },
         "DefaultActions": [
           {
             "Type": "forward",
@@ -958,7 +1100,18 @@
                     [
                       "arn:aws:s3:::",
                       {
-                        "Ref": "CogBucket"
+                        "Fn::If": [
+                          "CogBucketNameExists",
+                          {
+                            "Ref": "CogBucketName"
+                          },
+                          {
+                            "Ref": "CogBucket"
+                          }
+                        ]
+                      },
+                      {
+                        "Ref": "CogBucketPrefix"
                       }
                     ]
                   ]
@@ -969,9 +1122,20 @@
                     [
                       "arn:aws:s3:::",
                       {
-                        "Ref": "CogBucket"
+                        "Fn::If": [
+                          "CogBucketNameExists",
+                          {
+                            "Ref": "CogBucketName"
+                          },
+                          {
+                            "Ref": "CogBucket"
+                          }
+                        ]
                       },
-                      "/*"
+                      {
+                        "Ref": "CogBucketPrefix"
+                      },
+                      "*"
                     ]
                   ]
                 }
@@ -990,9 +1154,20 @@
                     [
                       "arn:aws:s3:::",
                       {
-                        "Ref": "CogBucket"
+                        "Fn::If": [
+                          "CogBucketNameExists",
+                          {
+                            "Ref": "CogBucketName"
+                          },
+                          {
+                            "Ref": "CogBucket"
+                          }
+                        ]
                       },
-                      "/*"
+                      {
+                        "Ref": "CogBucketPrefix"
+                      },
+                      "*"
                     ]
                   ]
                 }
@@ -1009,6 +1184,8 @@
           "Ref": "InstanceSubnetIds"
         },
         "DesiredCapacity": 1,
+        "MaxSize": 1,
+        "MinSize": 0,
         "HealthCheckType": "EC2",
         "HealthCheckGracePeriod": 300,
         "LaunchConfigurationName": {
@@ -1024,9 +1201,12 @@
           {
             "Ref": "CogElbServiceTarget"
           }
-        ],
-        "MaxSize": 1,
-        "MinSize": 1
+        ]
+      },
+      "UpdatePolicy": {
+        "AutoScalingReplacingUpdate": {
+          "WillReplace": "true"
+        }
       }
     },
     "CogAsgLaunchConfig": {
@@ -1060,26 +1240,20 @@
                 {
                   "Ref": "AWS::StackName"
                 },
-                " -r CogAsgLaunchConfig\n"
+                " -r CogAsgLaunchConfig\n",
+                "# Timestamp: ",
+                {
+                  "Fn::GetAtt": [
+                    "Time",
+                    "Now"
+                  ]
+                }
               ]
             ]
           }
         }
       },
       "Metadata": {
-        "AWS::CloudFormation::Authentication": {
-          "S3AccessCreds": {
-            "type": "S3",
-            "buckets": [
-              {
-                "Ref": "CogBucket"
-              }
-            ],
-            "roleName": {
-              "Ref": "CogInstanceRole"
-            }
-          }
-        },
         "AWS::CloudFormation::Init": {
           "configSets": {
             "default": [
@@ -1342,9 +1516,20 @@
                     [
                       "aws s3 cp --recursive s3://",
                       {
-                        "Ref": "CogBucket"
+                        "Fn::If": [
+                          "CogBucketNameExists",
+                          {
+                            "Ref": "CogBucketName"
+                          },
+                          {
+                            "Ref": "CogBucket"
+                          }
+                        ]
                       },
-                      "/etc/ /opt/cog || true"
+                      {
+                        "Ref": "CogBucketPrefix"
+                      },
+                      "etc/ /opt/cog || true"
                     ]
                   ]
                 }
@@ -1480,7 +1665,15 @@
   "Outputs": {
     "CogBucket": {
       "Value": {
-        "Ref": "CogBucket"
+        "Fn::If": [
+          "CogBucketNameExists",
+          {
+            "Ref": "CogBucketName"
+          },
+          {
+            "Ref": "CogBucket"
+          }
+        ]
       }
     },
     "CogElbHostname": {

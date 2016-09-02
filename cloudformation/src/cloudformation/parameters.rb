@@ -6,13 +6,40 @@
 # Required AWS Configuration
 #
 
-aws_params = %w(VpcId ElbSubnetIds InstanceSubnetIds KeyName InstanceType ImageId)
+aws_params = %w(VpcId ElbSubnetIds InstanceSubnetIds CogBucketName CogBucketPrefix KeyName InstanceType ImageId)
 
 parameter "VpcId",
   :Description => "VPC ID for Cog deployment",
   :Type => "AWS::EC2::VPC::Id",
   :Default => "",
   :ConstraintDescription => "must be an existing VPC"
+
+parameter "ElbSubnetIds",
+  :Description => "Subnets to use for load balancer - 2 or more required and should usually be public subnets",
+  :Type => "List<AWS::EC2::Subnet::Id>",
+  :Default => "",
+  :ConstraintDescription => "must be a list of VPC subnet IDs"
+
+parameter "InstanceSubnetIds",
+  :Description => "Subnets to use for Cog host and RDS databases - 2 or more required for multi-AZ RDS",
+  :Type => "List<AWS::EC2::Subnet::Id>",
+  :Default => "",
+  :ConstraintDescription => "must be a list of VPC subnet IDs"
+
+parameter "CogBucketName",
+  :Description => "Existing S3 bucket to use for Cog data - leave empty to create a new bucket automatically",
+  :Type => "String"
+
+condition "CogBucketNameEmpty", equal(ref("CogBucketName"), "")
+condition "CogBucketNameExists", not_equal(ref("CogBucketName"), "")
+
+parameter "CogBucketPrefix",
+  :Description => "Prefix path within S3 bucket for Cog data",
+  :Type => "String",
+  :Default => "/cog/",
+  :AllowedPattern => "^/.*/$",
+  :ConstraintDescription => "must begin and end with /"
+
 
 parameter "KeyName",
   :Description => "Name of an existing EC2 KeyPair to enable SSH access",
@@ -30,18 +57,6 @@ parameter "ImageId",
   :Type => "String",
   :Default => "ami-81365496",
   :ConstraintDescription => "must be an Ubuntu 16.04 LTS HVM/EBS AMI"
-
-parameter "ElbSubnetIds",
-  :Description => "Subnets to use for load balancer - 2 or more required and should usually be public subnets",
-  :Type => "List<AWS::EC2::Subnet::Id>",
-  :Default => "",
-  :ConstraintDescription => "must be a list of VPC subnet IDs"
-
-parameter "InstanceSubnetIds",
-  :Description => "Subnets to use for Cog host and RDS databases - 2 or more required for multi-AZ RDS",
-  :Type => "List<AWS::EC2::Subnet::Id>",
-  :Default => "",
-  :ConstraintDescription => "must be a list of VPC subnet IDs"
 
 ##
 # HTTP Configuration
@@ -217,11 +232,13 @@ cog_config(group: :common,
 
 aws_labels = {
   "VpcId" => { "default" => "* VPC ID" },
+  "ElbSubnetIds" => { "default" => "* ELB Subnet IDs" },
+  "InstanceSubnetIds" => { "default" => "* Instance Subnet IDs" },
+  "CogBucketName" => { "default" => "S3 Bucket" },
+  "CogBucketPrefix" => { "default" => "S3 Prefix" },
   "KeyName" => { "default" => "* EC2 SSH Keypair" },
   "InstanceType" => { "default" => "* EC2 Instance Type" },
   "ImageId" => { "default" => "* EC2 AMI" },
-  "ElbSubnetIds" => { "default" => "* ELB Subnet IDs" },
-  "InstanceSubnetIds" => { "default" => "* Instance Subnet IDs" },
   "RdsMasterUsername" => { "default" => "RDS Username" },
   "RdsMasterPassword" => { "default" => "RDS Password" },
   "RdsInstanceType" => { "default" => "DB Instance Type" },

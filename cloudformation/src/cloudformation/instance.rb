@@ -1,20 +1,104 @@
 # ---------------------------------------------------------------------------
+# Custom Timestamp Resource
+# ---------------------------------------------------------------------------
+
+# This resource uses a Lambda function that returns a simple timestamp
+# when it is created and any time any of the values in the ParamData list
+# in properties are updated. We use this in the ASG LaunchConfiguration in
+# order to update a comment in UserData and trigger an instance replacement
+# when relevant parameters are updated.
+
+resource "Time",
+  :Type => "Custom::TimestampFunction",
+  :Properties => {
+    :ServiceToken => get_att("TimestampFunction", "Arn"),
+    :ParamData => [
+      ref("ImageId"),
+      ref("InstanceSubnetIds"),
+      ref("InstanceType"),
+      ref("KeyName"),
+      ref("CogDnsname"),
+      ref("RdsMasterPassword"),
+      ref("RdsMasterUsername"),
+      get_att("RdsDatabase", "Endpoint.Address"),
+      get_att("RdsDatabase", "Endpoint.Port"),
+      ref("CogImage"),
+      ref("RelayImage"),
+      ref("CogDbSsl"),
+      ref("DatabaseSource"),
+      ref("DatabaseUrl"),
+      ref("SlackApiToken"),
+      ref("CogAllowSelfRegistration"),
+      ref("CogBootstrapEmailAddress"),
+      ref("CogBootstrapFirstName"),
+      ref("CogBootstrapInstance"),
+      ref("CogBootstrapLastName"),
+      ref("CogBootstrapPassword"),
+      ref("CogBootstrapUsername"),
+      ref("CogBucketName"),
+      ref("CogBucketPrefix"),
+      ref("RelayId"),
+      ref("RelayCogToken")
+    ]
+  }
+
+resource "TimestampFunction",
+  :Type => "AWS::Lambda::Function",
+  :Properties => {
+    :Code => {
+      :ZipFile => File.read(File.join(File.dirname(__FILE__), "..", "lambda-timestamp.js"))
+    },
+    :Handler => "index.handler",
+    :Role => get_att("LambdaLogRole", "Arn"),
+    :Runtime => "nodejs",
+    :Timeout => 3
+  }
+
+resource "LambdaLogRole",
+  :Type => "AWS::IAM::Role",
+  :Properties => {
+    :AssumeRolePolicyDocument => {
+      :Version => "2012-10-17",
+      :Statement => [
+        {
+          :Effect => "Allow",
+          :Principal => { :Service => [ "lambda.amazonaws.com" ] },
+          :Action => [ "sts:AssumeRole" ]
+        }
+      ]
+    },
+    :Path => "/",
+    :Policies => [
+      {
+        :PolicyName => "root",
+        :PolicyDocument => {
+          :Version => "2012-10-17",
+          :Statement => [
+            {
+              :Effect => "Allow",
+              :Action => [
+                "logs:CreateLogGroup",
+                "logs:CreateLogStream",
+                "logs:PutLogEvents"
+              ],
+              :Resource => "arn:aws:logs:*:*:*"
+            }
+          ]
+        }
+      }
+    ]
+  }
+
+# ---------------------------------------------------------------------------
 # S3 Bucket - Used for logs and advanced configuration.
 # ---------------------------------------------------------------------------
 
 resource "CogBucket",
   :Type => "AWS::S3::Bucket",
-  :Properties => {
-    :VersioningConfiguration => { :Status => "Enabled" },
-    :Tags => [
-      {
-        :Key => "Name",
-        :Value => "cog"
-      }
-    ]
-  }
+  :Condition => "CogBucketNameEmpty"
 
-output "CogBucket", :Value => ref("CogBucket")
+output "CogBucket",
+  :Value => fn_if("CogBucketNameExists", ref("CogBucketName"), ref("CogBucket"))
 
 # ---------------------------------------------------------------------------
 # ELB Configuration
@@ -55,29 +139,16 @@ resource "CogElbIngressICMP",
 
 resource "CogElbIngressAPI",
   :Type => "AWS::EC2::SecurityGroupIngress",
-  :Condition => "SslDisabled",
   :Properties => {
     :GroupId => ref("CogElbSecurityGroup"),
-    :FromPort => 80,
-    :ToPort => 80,
-    :IpProtocol => 6,
-    :CidrIp => "0.0.0.0/0"
-  }
-
-resource "CogElbIngressAPISsl",
-  :Type => "AWS::EC2::SecurityGroupIngress",
-  :Condition => "SslEnabled",
-  :Properties => {
-    :GroupId => ref("CogElbSecurityGroup"),
-    :FromPort => 443,
-    :ToPort => 443,
+    :FromPort => fn_if("SslEnabled", 443, 80),
+    :ToPort => fn_if("SslEnabled", 443, 80),
     :IpProtocol => 6,
     :CidrIp => "0.0.0.0/0"
   }
 
 resource "CogElbIngressTriggers",
   :Type => "AWS::EC2::SecurityGroupIngress",
-  :Condition => "SslDisabled",
   :Properties => {
     :GroupId => ref("CogElbSecurityGroup"),
     :FromPort => 4001,
@@ -86,35 +157,12 @@ resource "CogElbIngressTriggers",
     :CidrIp => "0.0.0.0/0"
   }
 
-resource "CogElbIngressTriggersSsl",
-  :Type => "AWS::EC2::SecurityGroupIngress",
-  :Condition => "SslEnabled",
-  :Properties => {
-    :GroupId => ref("CogElbSecurityGroup"),
-    :FromPort => 5001,
-    :ToPort => 5001,
-    :IpProtocol => 6,
-    :CidrIp => "0.0.0.0/0"
-  }
-
 resource "CogElbIngressServices",
   :Type => "AWS::EC2::SecurityGroupIngress",
-  :Condition => "SslDisabled",
   :Properties => {
     :GroupId => ref("CogElbSecurityGroup"),
     :FromPort => 4002,
     :ToPort => 4002,
-    :IpProtocol => 6,
-    :CidrIp => "0.0.0.0/0"
-  }
-
-resource "CogElbIngressServicesSsl",
-  :Type => "AWS::EC2::SecurityGroupIngress",
-  :Condition => "SslEnabled",
-  :Properties => {
-    :GroupId => ref("CogElbSecurityGroup"),
-    :FromPort => 5002,
-    :ToPort => 5002,
     :IpProtocol => 6,
     :CidrIp => "0.0.0.0/0"
   }
@@ -150,27 +198,14 @@ resource "CogElbApiTarget",
 
 resource "CogElbApiListener",
   :Type => "AWS::ElasticLoadBalancingV2::Listener",
-  :Condition => "SslDisabled",
   :Properties => {
     :LoadBalancerArn => ref("CogElbV2"),
-    :Port => 80,
-    :Protocol => "HTTP",
-    :DefaultActions => [
-      {
-        :Type => "forward",
-        :TargetGroupArn => ref("CogElbApiTarget")
-      }
-    ]
-  }
-
-resource "CogElbApiListenerSsl",
-  :Type => "AWS::ElasticLoadBalancingV2::Listener",
-  :Condition => "SslEnabled",
-  :Properties => {
-    :LoadBalancerArn => ref("CogElbV2"),
-    :Port => 443,
-    :Protocol => "HTTPS",
-    :Certificates => [{ :CertificateArn => ref("SslCertificateArn") }],
+    :Port => fn_if("SslEnabled", "443", "80"),
+    :Protocol => fn_if("SslEnabled", "HTTPS", "HTTP"),
+    :Certificates =>
+      fn_if("SslEnabled",
+        [{ :CertificateArn => ref("SslCertificateArn") }],
+        ref("AWS::NoValue")),
     :DefaultActions => [
       {
         :Type => "forward",
@@ -196,27 +231,14 @@ resource "CogElbTriggerTarget",
 
 resource "CogElbTriggerListener",
   :Type => "AWS::ElasticLoadBalancingV2::Listener",
-  :Condition => "SslDisabled",
   :Properties => {
     :LoadBalancerArn => ref("CogElbV2"),
     :Port => 4001,
-    :Protocol => "HTTP",
-    :DefaultActions => [
-      {
-        :Type => "forward",
-        :TargetGroupArn => ref("CogElbTriggerTarget")
-      }
-    ]
-  }
-
-resource "CogElbTriggerListenerSSL",
-  :Type => "AWS::ElasticLoadBalancingV2::Listener",
-  :Condition => "SslEnabled",
-  :Properties => {
-    :LoadBalancerArn => ref("CogElbV2"),
-    :Port => 5001,
-    :Protocol => "HTTPS",
-    :Certificates => [{ :CertificateArn => ref("SslCertificateArn") }],
+    :Protocol => fn_if("SslEnabled", "HTTPS", "HTTP"),
+    :Certificates =>
+      fn_if("SslEnabled",
+        [{ :CertificateArn => ref("SslCertificateArn") }],
+        ref("AWS::NoValue")),
     :DefaultActions => [
       {
         :Type => "forward",
@@ -242,27 +264,14 @@ resource "CogElbServiceTarget",
 
 resource "CogElbServiceListener",
   :Type => "AWS::ElasticLoadBalancingV2::Listener",
-  :Condition => "SslDisabled",
   :Properties => {
     :LoadBalancerArn => ref("CogElbV2"),
     :Port => 4002,
-    :Protocol => "HTTP",
-    :DefaultActions => [
-      {
-        :Type => "forward",
-        :TargetGroupArn => ref("CogElbServiceTarget")
-      }
-    ]
-  }
-
-resource "CogElbServiceListenerSsl",
-  :Type => "AWS::ElasticLoadBalancingV2::Listener",
-  :Condition => "SslEnabled",
-  :Properties => {
-    :LoadBalancerArn => ref("CogElbV2"),
-    :Port => 5002,
-    :Protocol => "HTTPS",
-    :Certificates => [{ :CertificateArn => ref("SslCertificateArn") }],
+    :Protocol => fn_if("SslEnabled", "HTTPS", "HTTP"),
+    :Certificates =>
+      fn_if("SslEnabled",
+        [{ :CertificateArn => ref("SslCertificateArn") }],
+        ref("AWS::NoValue")),
     :DefaultActions => [
       {
         :Type => "forward",
@@ -359,14 +368,31 @@ resource "CogInstancePolicyS3",
           :Effect => "Allow",
           :Action => [ "s3:ListBucket" ],
           :Resource => [
-            join("", "arn:aws:s3:::", ref("CogBucket")),
-            join("", "arn:aws:s3:::", ref("CogBucket"), "/*")
+            join("",
+              "arn:aws:s3:::",
+              fn_if("CogBucketNameExists",
+                ref("CogBucketName"),
+                ref("CogBucket")),
+              ref("CogBucketPrefix")),
+            join("",
+              "arn:aws:s3:::",
+              fn_if("CogBucketNameExists",
+                ref("CogBucketName"),
+                ref("CogBucket")),
+              ref("CogBucketPrefix"), "*"),
           ]
         },
         {
           :Effect => "Allow",
           :Action => [ "s3:PutObject", "s3:GetObject" ],
-          :Resource => [ join("", "arn:aws:s3:::", ref("CogBucket"), "/*") ]
+          :Resource => [
+            join("",
+              "arn:aws:s3:::",
+              fn_if("CogBucketNameExists",
+                ref("CogBucketName"),
+                ref("CogBucket")),
+              ref("CogBucketPrefix"), "*")
+          ]
         }
       ]
     }
@@ -379,7 +405,9 @@ resource "CogAsg",
   :Properties => {
     :VPCZoneIdentifier => ref("InstanceSubnetIds"),
     :DesiredCapacity => 1,
-    :HealthCheckType => "EC2", # ELB ...
+    :MaxSize => 1,
+    :MinSize => 0,
+    :HealthCheckType => "EC2",
     :HealthCheckGracePeriod => 300,
     :LaunchConfigurationName => ref("CogAsgLaunchConfig"),
     :TargetGroupARNs => [
@@ -387,10 +415,13 @@ resource "CogAsg",
       ref("CogElbTriggerTarget"),
       ref("CogElbServiceTarget")
     ],
-    :MaxSize => 1,
-    :MinSize => 1
-
+  },
+  :UpdatePolicy => {
+      :AutoScalingReplacingUpdate => {
+        :WillReplace => "true"
+      }
   }
+
 resource "CogAsgLaunchConfig",
   :Type => "AWS::AutoScaling::LaunchConfiguration",
   :Properties => {
@@ -402,17 +433,11 @@ resource "CogAsgLaunchConfig",
     :SecurityGroups => [ ref("CogInstanceSecurityGroup") ],
     :UserData => base64(join("",
       File.read(File.join(File.dirname(__FILE__), "..", "cloud-config")),
-      "  - cfn-init -s ", ref("AWS::StackName"), " -r CogAsgLaunchConfig\n"
+      "  - cfn-init -s ", ref("AWS::StackName"), " -r CogAsgLaunchConfig\n",
+      "# Timestamp: ", get_att("Time", "Now")
     ))
   },
   :Metadata => {
-    "AWS::CloudFormation::Authentication" => {
-      :S3AccessCreds => {
-        :type => "S3",
-        :buckets => [ ref("CogBucket") ],
-        :roleName => ref("CogInstanceRole")
-      }
-    },
     "AWS::CloudFormation::Init" => {
       :configSets => {
         :default => [ "setup_paths", "configure", "run" ]
@@ -494,7 +519,13 @@ resource "CogAsgLaunchConfig",
           # We do this with AWSCLI so cfn-init won't abort if the file is not
           # present.
           :copy_s3_resources => {
-            :command => join("", "aws s3 cp --recursive s3://", ref("CogBucket"), "/etc/ /opt/cog || true")
+            :command =>
+              join("",
+                "aws s3 cp --recursive s3://",
+                fn_if("CogBucketNameExists",
+                  ref("CogBucketName"),
+                  ref("CogBucket")),
+                ref("CogBucketPrefix"), "etc/ /opt/cog || true")
           }
         }
       },
