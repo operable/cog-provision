@@ -6,7 +6,7 @@
 # Required AWS Configuration
 #
 
-aws_params = %w(VpcId SubnetIds KeyName InstanceType ImageId)
+aws_params = %w(VpcId ElbSubnetIds InstanceSubnetIds KeyName InstanceType ImageId)
 
 parameter "VpcId",
   :Description => "VPC ID for Cog deployment",
@@ -31,8 +31,14 @@ parameter "ImageId",
   :Default => "ami-81365496",
   :ConstraintDescription => "must be an Ubuntu 16.04 LTS HVM/EBS AMI"
 
-parameter "SubnetIds",
-  :Description => "Comma separated list of subnets - 2 or more required for MultiAZ RDS",
+parameter "ElbSubnetIds",
+  :Description => "Subnets to use for load balancer - 2 or more required and should usually be public subnets",
+  :Type => "List<AWS::EC2::Subnet::Id>",
+  :Default => "",
+  :ConstraintDescription => "must be a list of VPC subnet IDs"
+
+parameter "InstanceSubnetIds",
+  :Description => "Subnets to use for Cog host and RDS databases - 2 or more required for multi-AZ RDS",
   :Type => "List<AWS::EC2::Subnet::Id>",
   :Default => "",
   :ConstraintDescription => "must be a list of VPC subnet IDs"
@@ -214,7 +220,8 @@ aws_labels = {
   "KeyName" => { "default" => "* EC2 SSH Keypair" },
   "InstanceType" => { "default" => "* EC2 Instance Type" },
   "ImageId" => { "default" => "* EC2 AMI" },
-  "SubnetIds" => { "default" => "* VPC Subnet IDs" },
+  "ElbSubnetIds" => { "default" => "* ELB Subnet IDs" },
+  "InstanceSubnetIds" => { "default" => "* Instance Subnet IDs" },
   "RdsMasterUsername" => { "default" => "RDS Username" },
   "RdsMasterPassword" => { "default" => "RDS Password" },
   "RdsInstanceType" => { "default" => "DB Instance Type" },

@@ -124,7 +124,7 @@ resource "CogElbV2",
   :Properties => {
     :Name => "cog",
     :SecurityGroups => [ ref("CogElbSecurityGroup") ],
-    :Subnets => ref("SubnetIds"),
+    :Subnets => ref("ElbSubnetIds"),
     :Tags => [
       {
         :Key => "Name",
@@ -377,7 +377,7 @@ output "CogInstanceRole", :Value => get_att("CogInstanceRole", "Arn")
 resource "CogAsg",
   :Type => "AWS::AutoScaling::AutoScalingGroup",
   :Properties => {
-    :VPCZoneIdentifier => ref("SubnetIds"),
+    :VPCZoneIdentifier => ref("InstanceSubnetIds"),
     :DesiredCapacity => 1,
     :HealthCheckType => "EC2", # ELB ...
     :HealthCheckGracePeriod => 300,

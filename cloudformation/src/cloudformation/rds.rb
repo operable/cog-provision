@@ -7,7 +7,7 @@ resource "RdsSubnetGroup",
   :Condition => "ProvisionRds",
   :Properties => {
     :DBSubnetGroupDescription => "Cog Database",
-    :SubnetIds => ref("SubnetIds"),
+    :SubnetIds => ref("InstanceSubnetIds"),
     :Tags => [
       {
         :Key => "Name",

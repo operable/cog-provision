@@ -25,8 +25,14 @@
       "Default": "ami-81365496",
       "ConstraintDescription": "must be an Ubuntu 16.04 LTS HVM/EBS AMI"
     },
-    "SubnetIds": {
-      "Description": "Comma separated list of subnets - 2 or more required for MultiAZ RDS",
+    "ElbSubnetIds": {
+      "Description": "Subnets to use for load balancer - 2 or more required and should usually be public subnets",
+      "Type": "List<AWS::EC2::Subnet::Id>",
+      "Default": "",
+      "ConstraintDescription": "must be a list of VPC subnet IDs"
+    },
+    "InstanceSubnetIds": {
+      "Description": "Subnets to use for Cog host and RDS databases - 2 or more required for multi-AZ RDS",
       "Type": "List<AWS::EC2::Subnet::Id>",
       "Default": "",
       "ConstraintDescription": "must be a list of VPC subnet IDs"
@@ -321,7 +327,8 @@
           },
           "Parameters": [
             "VpcId",
-            "SubnetIds",
+            "ElbSubnetIds",
+            "InstanceSubnetIds",
             "KeyName",
             "InstanceType",
             "ImageId"
@@ -413,8 +420,11 @@
         "ImageId": {
           "default": "* EC2 AMI"
         },
-        "SubnetIds": {
-          "default": "* VPC Subnet IDs"
+        "ElbSubnetIds": {
+          "default": "* ELB Subnet IDs"
+        },
+        "InstanceSubnetIds": {
+          "default": "* Instance Subnet IDs"
         },
         "RdsMasterUsername": {
           "default": "RDS Username"
@@ -630,7 +640,7 @@
           }
         ],
         "Subnets": {
-          "Ref": "SubnetIds"
+          "Ref": "ElbSubnetIds"
         },
         "Tags": [
           {
@@ -996,7 +1006,7 @@
       "Type": "AWS::AutoScaling::AutoScalingGroup",
       "Properties": {
         "VPCZoneIdentifier": {
-          "Ref": "SubnetIds"
+          "Ref": "InstanceSubnetIds"
         },
         "DesiredCapacity": 1,
         "HealthCheckType": "EC2",
@@ -1358,7 +1368,7 @@
       "Properties": {
         "DBSubnetGroupDescription": "Cog Database",
         "SubnetIds": {
-          "Ref": "SubnetIds"
+          "Ref": "InstanceSubnetIds"
         },
         "Tags": [
           {
