@@ -55,7 +55,7 @@ parameter "InstanceType",
 parameter "ImageId",
   :Description => "Cog Host AMI",
   :Type => "String",
-  :Default => "ami-81365496",
+  :Default => "ami-2ef48339",
   :ConstraintDescription => "must be an Ubuntu 16.04 LTS HVM/EBS AMI"
 
 ##
