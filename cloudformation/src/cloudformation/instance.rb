@@ -402,6 +402,7 @@ output "CogInstanceRole", :Value => get_att("CogInstanceRole", "Arn")
 
 resource "CogAsg",
   :Type => "AWS::AutoScaling::AutoScalingGroup",
+  :UpdatePolicy => { :AutoScalingReplacingUpdate => { :WillReplace => true } },
   :Properties => {
     :VPCZoneIdentifier => ref("InstanceSubnetIds"),
     :DesiredCapacity => 1,
