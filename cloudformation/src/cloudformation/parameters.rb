@@ -132,7 +132,8 @@ parameter "DatabaseUrl",
   :Description => "Database connection string for external database",
   :Type => "String",
   :AllowedPattern => "^(ecto://[^:]+:[^@]+@[^/]+/.*)?$",
-  :ConstraintDescription => "must be a valid Cog database URL"
+  :ConstraintDescription => "must be empty or a valid Cog database URL",
+  :Default => ""
 
 parameter "CogDbSsl",
   :Description => "Use SSL to connect to Postgres",
