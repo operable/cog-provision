@@ -147,6 +147,11 @@
       ],
       "Default": "false"
     },
+    "RdsSnapshotIdentifier": {
+      "Description": "The RDS DB snapshot to restore. Leave blank to create an empty database.",
+      "Type": "String",
+      "Default": ""
+    },
     "CogBootstrapInstance": {
       "Description": "Configure Cog admin user automatically with bootstrap settings or manually via cogctl",
       "Type": "String",
@@ -292,6 +297,18 @@
         "RDS"
       ]
     },
+    "HasDBSnapshot": {
+      "Fn::Not": [
+        {
+          "Fn::Equals": [
+            {
+              "Ref": "RdsSnapshotIdentifier"
+            },
+            ""
+          ]
+        }
+      ]
+    },
     "CogBootstrapInstance": {
       "Fn::Equals": [
         {
@@ -403,7 +420,8 @@
             "RdsInstanceType",
             "RdsStorage",
             "RdsBackupRetention",
-            "RdsMultiAZ"
+            "RdsMultiAZ",
+            "RdsSnapshotIdentifier"
           ]
         },
         {
@@ -1623,6 +1641,7 @@
     "RdsDatabase": {
       "Type": "AWS::RDS::DBInstance",
       "Condition": "ProvisionRds",
+      "DeletionPolicy": "Snapshot",
       "Properties": {
         "AllocatedStorage": {
           "Ref": "RdsStorage"
@@ -1652,6 +1671,17 @@
         },
         "MasterUserPassword": {
           "Ref": "RdsMasterPassword"
+        },
+        "DBSnapshotIdentifier": {
+          "Fn::If": [
+            "HasDBSnapshot",
+            {
+              "Ref": "RdsSnapshotIdentifier"
+            },
+            {
+              "Ref": "AWS::NoValue"
+            }
+          ]
         },
         "Tags": [
           {
