@@ -2,33 +2,8 @@
 # Cog ChatOps Platform: Core Components
 # ----------------------------------------------------------------------------
 #
-# This CloudFormation template provisions a Docker host running Cog and Relay
-# in containers.
-#
-# Notes:
-#
-# - The Docker host is managed via an auto-scaling group that attempts to
-#   ensure that there is always a single healthy instance available.
-#
-# - External access to the Cog APIs is managed by an Elastic Load Balancer.
-#   SSL support is available by providing an Amazon Certificate Manager
-#   ARN in the SslCertificateArn parameter.
-#
-# - The Docker host has an IAM role associated with it. You may add policies
-#   to this role to if you have Cog bundles which interact with AWS services.
-#   The name of the role is available in the CogInstanceRole output for this
-#   stack.
-#
-# Dependencies:
-#
-# - Postgres database. This can either be provided via the DatabaseUrl
-#   parameter in the template or by using cross-stack references to an
-#   export from a CloudFormation stack running the Cog RDS template.
-#
-# - S3 bucket. Cog uses an S3 bucket for some configuration data. You can
-#   use a prefix within an existing bucket by supplying the path in the
-#   CogBucketName parameter. If you leave the parameter empty, a new bucket
-#   will be created for you.
+# More information available at:
+# https://github.com/operable/cog-provision/tree/master/cloudformation
 #
 # ----------------------------------------------------------------------------
 ---
@@ -173,6 +148,30 @@ Parameters:
     AllowedValues:
     - "false"
     - "true"
+  CogSmtpServer:
+    Description: "COG_SMTP_SERVER: SMTP server hostname"
+    Type: String
+    Default: ""
+  CogSmtpPort:
+    Description: "COG_SMTP_PORT: SMTP server port"
+    Type: String
+    Default: "25"
+  CogSmtpUsername:
+    Description: "COG_SMTP_USERNAME: SMTP server user name"
+    Type: String
+    Default: ""
+  CogSmtpPassword:
+    NoEcho: "true"
+    Description: "COG_SMTP_PASSWORD: SMTP server password"
+    Type: String
+    Default: ""
+  CogSmtpSsl:
+    Description: "COG_SMTP_SSL: Use SSL for SMTP connections"
+    Type: String
+    Default: "false"
+    AllowedValues:
+    - "false"
+    - "true"
 Conditions:
   CogBucketNameEmpty: !Equals [!Ref CogBucketName, ""]
   CogBucketNameExists: !Not [!Equals [!Ref CogBucketName, ""]]
@@ -247,6 +246,14 @@ Metadata:
         default: Cog Config (Frequently Updated)
       Parameters:
       - CogAllowSelfRegistration
+    - Label:
+        default: Cog Config (Password Reset / SMTP Settings)
+      Parameters:
+      - CogSmtpServer
+      - CogSmtpPort
+      - CogSmtpUsername
+      - CogSmtpPassword
+      - CogSmtpSsl
     ParameterLabels:
       VpcId:
         default: "* VPC ID"
@@ -302,6 +309,16 @@ Metadata:
         default: Last Name
       CogBootstrapEmailAddress:
         default: Email Address
+      CogSmtpServer:
+        default: Hostname
+      CogSmtpPort:
+        default: Port
+      CogSmtpUsername:
+        default: Username
+      CogSmtpPassword:
+        default: Password
+      CogSmtpSsl:
+        default: Use SSL
 Resources:
   Time:
     Type: Custom::TimestampFunction
@@ -332,6 +349,11 @@ Resources:
       - !Ref CogBucketPrefix
       - !Ref RelayId
       - !Ref RelayCogToken
+      - !Ref CogSmtpServer
+      - !Ref CogSmtpPort
+      - !Ref CogSmtpUsername
+      - !Ref CogSmtpPassword
+      - !Ref CogSmtpSsl
   TimestampFunction:
     Type: AWS::Lambda::Function
     Properties:
@@ -670,6 +692,11 @@ Resources:
                     RELAY_ID=${RelayId}
                     RELAY_IMAGE=${RelayImage}
                     RELAY_COG_TOKEN=${RelayCogToken}
+                    COG_SMTP_SERVER=${CogSmtpServer}
+                    COG_SMTP_PORT=${CogSmtpPort}
+                    COG_SMTP_USERNAME=${CogSmtpUsername}
+                    COG_SMTP_PASSWORD=${CogSmtpPassword}
+                    COG_SMTP_SSL=${CogSmtpSsl}
                     ${BootstrapVars}
                   -
                     CogDatabaseUrl: !If

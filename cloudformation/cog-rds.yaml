@@ -1,19 +1,9 @@
 # ============================================================================
-# Cog ChatOps Platform
+# Cog ChatOps Platform: RDS Database
 # ----------------------------------------------------------------------------
 #
-# This CloudFormation template provisions a Postgres RDS instance to support
-# a Cog installation.
-#
-# Notes:
-#
-# - The database URL and security group that are associated with this RDS
-#   instance are made available as exported outputs.
-#
-# - If you intend to run multiple stacks using this template, you should use
-#   the DatabaseUrlExport and SecurityGroupExport parameters to adjust the 
-#   exported output names. Make sure to use the same names when configuring
-#   the Cog core component stack.
+# More information available at:
+# https://github.com/operable/cog-provision/tree/master/cloudformation
 #
 # -------------------------------------------------------------------------------
 ---
