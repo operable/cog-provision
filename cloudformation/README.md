@@ -5,9 +5,9 @@ instance in Amazon Web Services.
 
 ## Quickstart
 
-- [ ] [Create new Slack API token](https://my.slack.com/services/new/bot)
-- [ ] [Create new RDS database](https://console.aws.amazon.com/cloudformation/home?#/stacks/new?stackName=cog-rds&templateURL=https:%2F%2Foperable-prod-cfn-public.s3.amazonaws.com%2Flatest%2Fcog-rds.yaml)
-- [ ] [Create Cog instance](https://console.aws.amazon.com/cloudformation/home?#/stacks/new?stackName=cog&templateURL=https:%2F%2Foperable-prod-cfn-public.s3.amazonaws.com%2Flatest%2Fcog.yaml)
+- [ ] [Create a new Slack API token](https://my.slack.com/services/new/bot).
+- [ ] [Provision an RDS database](https://console.aws.amazon.com/cloudformation/home?#/stacks/new?stackName=cog-rds&templateURL=https:%2F%2Foperable-prod-cfn-public.s3.amazonaws.com%2Flatest%2Fcog-rds.yaml).
+- [ ] [Install Cog](https://console.aws.amazon.com/cloudformation/home?#/stacks/new?stackName=cog&templateURL=https:%2F%2Foperable-prod-cfn-public.s3.amazonaws.com%2Flatest%2Fcog.yaml).
 
 More detailed explanations are available in the Cog Core Components and Cog RDS
 Database sections below. 
