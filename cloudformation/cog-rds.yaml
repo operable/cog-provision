@@ -1,0 +1,161 @@
+# ============================================================================
+# Cog ChatOps Platform: RDS Database
+# ----------------------------------------------------------------------------
+#
+# More information available at:
+# https://github.com/operable/cog-provision/tree/master/cloudformation
+#
+# -------------------------------------------------------------------------------
+---
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "Cog ChatOps Platform: RDS Database Stack"
+Parameters:
+  VpcId:
+    Description: VPC ID for Cog deployment
+    Type: AWS::EC2::VPC::Id
+    Default: ""
+    ConstraintDescription: must be an existing VPC
+  SubnetIds:
+    Description: Subnets to use for Cog host and RDS databases - 2 or more required for multi-AZ RDS
+    Type: List<AWS::EC2::Subnet::Id>
+    Default: ""
+    ConstraintDescription: must be a list of VPC subnet IDs
+  RdsMasterUsername:
+    Description: Username for Postgres admin user
+    Type: String
+    Default: cog
+  RdsMasterPassword:
+    Description: Password for Postgres admin user
+    Type: String
+    NoEcho: "true"
+  RdsInstanceType:
+    Description: Instance type to use for RDS database
+    Type: String
+    Default: db.m3.medium
+  RdsStorage:
+    Description: Space in GB to allocate for database storage
+    Type: Number
+    Default: "20"
+  RdsBackupRetention:
+    Description: Number of days to retain automatic RDS backups
+    Type: Number
+    Default: "30"
+  RdsMultiAZ:
+    Description: Configure multi-AZ failover HA - requires 2 or more subnet IDs to be defined
+    Type: String
+    AllowedValues:
+    - "false"
+    - "true"
+    Default: "false"
+  DatabaseUrlExport:
+    Description: Name to use for Cog database URL export
+    Type: String
+    MinLength: "1"
+    Default: CogRdsDatabaseUrl
+  SecurityGroupExport:
+    Description: Name to use for security group export
+    Type: String
+    MinLength: "1"
+    Default: CogRdsSecurityGroup
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+    - Label:
+        default: AWS Global Configuration
+      Parameters:
+      - VpcId
+      - SubnetIds
+      - DatabaseUrlExport
+      - SecurityGroupExport
+    - Label:
+        default: Database Configuration
+      Parameters:
+      - RdsMasterUsername
+      - RdsMasterPassword
+      - RdsInstanceType
+      - RdsStorage
+      - RdsBackupRetention
+      - RdsMultiAZ
+    ParameterLabels:
+      VpcId:
+        default: "* VPC ID"
+      InstanceSubnetIds:
+        default: "* Subnet IDs"
+      DatabaseUrlExport:
+        default: Database URL Export Name
+      SecurityGroupExport:
+        default: Security Group Export Name
+      RdsMasterUsername:
+        default: RDS Username
+      RdsMasterPassword:
+        default: RDS Password
+      RdsInstanceType:
+        default: DB Instance Type
+      RdsStorage:
+        default: Storage (GB)
+      RdsBackupRetention:
+        default: Backup Retention (Days)
+      RdsMultiAZ:
+        default: Multi-AZ HA
+Resources:
+  RdsSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: Cog Database
+      SubnetIds: !Ref SubnetIds
+      Tags:
+      - Key: Name
+        Value: cog
+  RdsSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Cog RDS Security Group
+      VpcId: !Ref VpcId
+      Tags:
+      - Key: Name
+        Value: cog-rds
+  RdsEgressAny:
+    Type: AWS::EC2::SecurityGroupEgress
+    Properties:
+      GroupId: !Ref RdsSecurityGroup
+      FromPort: -1
+      ToPort: -1
+      IpProtocol: -1
+      CidrIp: 0.0.0.0/0
+  RdsIngressICMP:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref RdsSecurityGroup
+      FromPort: -1
+      ToPort: -1
+      IpProtocol: 1
+      CidrIp: 0.0.0.0/0
+  RdsDatabase:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      AllocatedStorage: !Ref RdsStorage
+      BackupRetentionPeriod: !Ref RdsBackupRetention
+      DBName: cog
+      DBInstanceClass: !Ref RdsInstanceType
+      DBSubnetGroupName: !Ref RdsSubnetGroup
+      Engine: postgres
+      MultiAZ: !Ref RdsMultiAZ
+      StorageType: gp2
+      VPCSecurityGroups:
+      - !Ref RdsSecurityGroup
+      MasterUsername: !Ref RdsMasterUsername
+      MasterUserPassword: !Ref RdsMasterPassword
+      Tags:
+      - Key: Name
+        Value: cog
+Outputs:
+  CogRdsDatabase:
+    Value: !Ref RdsDatabase
+  CogRdsDatabaseUrl:
+    Value: !Sub "ecto://${RdsMasterUsername}:${RdsMasterPassword}@${RdsDatabase.Endpoint.Address}:${RdsDatabase.Endpoint.Port}/cog"
+    Export:
+      Name: !Ref DatabaseUrlExport
+  CogRdsSecurityGroup:
+    Value: !Ref RdsSecurityGroup
+    Export:
+      Name: !Ref SecurityGroupExport
