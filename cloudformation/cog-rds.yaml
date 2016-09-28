@@ -48,12 +48,12 @@ Parameters:
     - "true"
     Default: "false"
   DatabaseUrlExport:
-    Description: Name to use for Cog database URL export
+    Description: Name to use for Cog database URL export if running more than one copy of this template in a VPC
     Type: String
     MinLength: "1"
     Default: CogRdsDatabaseUrl
   SecurityGroupExport:
-    Description: Name to use for security group export
+    Description: Name to use for security group export if running more than one copy of this template in a VPC
     Type: String
     MinLength: "1"
     Default: CogRdsSecurityGroup
@@ -65,8 +65,6 @@ Metadata:
       Parameters:
       - VpcId
       - SubnetIds
-      - DatabaseUrlExport
-      - SecurityGroupExport
     - Label:
         default: Database Configuration
       Parameters:
@@ -76,6 +74,11 @@ Metadata:
       - RdsStorage
       - RdsBackupRetention
       - RdsMultiAZ
+    - Label:
+        default: Advanced Configuration
+      Parameters:
+      - DatabaseUrlExport
+      - SecurityGroupExport
     ParameterLabels:
       VpcId:
         default: "* VPC ID"
