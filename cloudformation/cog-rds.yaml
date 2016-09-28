@@ -79,12 +79,12 @@ Metadata:
     ParameterLabels:
       VpcId:
         default: "* VPC ID"
-      InstanceSubnetIds:
+      SubnetIds:
         default: "* Subnet IDs"
       DatabaseUrlExport:
-        default: Database URL Export Name
+        default: Database URL Export
       SecurityGroupExport:
-        default: Security Group Export Name
+        default: Security Group Export
       RdsMasterUsername:
         default: RDS Username
       RdsMasterPassword:
