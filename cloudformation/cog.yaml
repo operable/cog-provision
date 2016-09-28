@@ -1,0 +1,785 @@
+# ============================================================================
+# Cog ChatOps Platform: Core Components
+# ----------------------------------------------------------------------------
+#
+# This CloudFormation template provisions a Docker host running Cog and Relay
+# in containers.
+#
+# Notes:
+#
+# - The Docker host is managed via an auto-scaling group that attempts to
+#   ensure that there is always a single healthy instance available.
+#
+# - External access to the Cog APIs is managed by an Elastic Load Balancer.
+#   SSL support is available by providing an Amazon Certificate Manager
+#   ARN in the SslCertificateArn parameter.
+#
+# - The Docker host has an IAM role associated with it. You may add policies
+#   to this role to if you have Cog bundles which interact with AWS services.
+#   The name of the role is available in the CogInstanceRole output for this
+#   stack.
+#
+# Dependencies:
+#
+# - Postgres database. This can either be provided via the DatabaseUrl
+#   parameter in the template or by using cross-stack references to an
+#   export from a CloudFormation stack running the Cog RDS template.
+#
+# - S3 bucket. Cog uses an S3 bucket for some configuration data. You can
+#   use a prefix within an existing bucket by supplying the path in the
+#   CogBucketName parameter. If you leave the parameter empty, a new bucket
+#   will be created for you.
+#
+# ----------------------------------------------------------------------------
+---
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "Cog ChatOps Platform: Core Components"
+Parameters:
+  VpcId:
+    Description: VPC ID for Cog deployment
+    Type: AWS::EC2::VPC::Id
+    Default: ""
+    ConstraintDescription: must be an existing VPC
+  ElbSubnetIds:
+    Description: Subnets to use for load balancer - 2 or more required and should usually be public subnets
+    Type: List<AWS::EC2::Subnet::Id>
+    Default: ""
+    ConstraintDescription: must be a list of VPC subnet IDs
+  InstanceSubnetIds:
+    Description: Subnets to use for Cog host and RDS databases - 2 or more required for multi-AZ RDS
+    Type: List<AWS::EC2::Subnet::Id>
+    Default: ""
+    ConstraintDescription: must be a list of VPC subnet IDs
+  CogBucketName:
+    Description: Existing S3 bucket to use for Cog data - leave empty to create a new bucket automatically
+    Type: String
+  CogBucketPrefix:
+    Description: Prefix path within S3 bucket for Cog data
+    Type: String
+    Default: "/cog/"
+    AllowedPattern: "^/.*/$"
+    ConstraintDescription: must begin and end with /
+  KeyName:
+    Description: Name of an existing EC2 KeyPair to enable SSH access
+    Type: AWS::EC2::KeyPair::KeyName
+    ConstraintDescription: must be the name of an existing EC2 KeyPair
+  InstanceType:
+    Description: Cog Host EC2 instance type
+    Type: String
+    Default: t2.medium
+    ConstraintDescription: must be an HVM/EBS EC2 instance type
+  ImageId:
+    Description: Cog Host AMI
+    Type: String
+    Default: ami-e3c3b8f4
+    ConstraintDescription: must be an Ubuntu 16.04 LTS HVM/EBS AMI
+  CogDnsname:
+    Description: DNS hostname to use for Cog APIs - defaults to ELB DNS name if not set
+    Type: String
+    Default: ""
+  SslCertificateArn:
+    Description: AWS Certificate Manager ARN for SSL certificate to use for ELB
+    Type: String
+    Default: ""
+    AllowedPattern: "^(arn:aws:acm.*)?$"
+    ConstraintDescription: must be a valid AWS Certificate Manager ARN
+  CogImage:
+    MinLength: "1"
+    Description: "COG_IMAGE: Cog Docker Image"
+    Type: String
+    Default: operable/cog:0.14-rc1
+  SlackApiToken:
+    NoEcho: "true"
+    Description: "SLACK_API_TOKEN: Slack API token"
+    Type: String
+    Default: ""
+  RelayImage:
+    MinLength: "1"
+    Description: "RELAY_IMAGE: Relay Docker Image"
+    Type: String
+    Default: operable/relay:0.14-rc1
+  RelayId:
+    Description: "RELAY_ID: UUID for Relay"
+    Type: String
+    Default: 00000000-0000-0000-0000-000000000000
+  RelayCogToken:
+    NoEcho: "true"
+    Description: "RELAY_COG_TOKEN: Shared secret for Relay"
+    Type: String
+    Default: ""
+  DatabaseSource:
+    Description: Use official Cog RDS or provided Database URL
+    Type: String
+    Default: "RDS"
+    AllowedValues:
+    - "RDS"
+    - "URL"
+    ConstraintDescription: must be an existing stack using the standard Cog RDS template
+  CogRdsDatabaseUrlExport:
+    Description: Name of exported database URL from Cog RDS stack
+    Type: String
+    MinLength: "1"
+    Default: CogRdsDatabaseUrl
+    ConstraintDescription: must be the name of the exported database URL from a Cog RDS stack
+  CogRdsSecurityGroupExport:
+    Description: Name of exported security group from Cog RDS stack
+    Type: String
+    MinLength: "1"
+    Default: CogRdsSecurityGroup
+    ConstraintDescription: must be the name of the exported security group ID from a Cog RDS stack
+  DatabaseUrl:
+    Description: Database connection string for external database
+    Type: String
+    AllowedPattern: "^(ecto://[^:]+:[^@]+@[^/]+/.*)?$"
+    ConstraintDescription: must be a valid Cog database URL
+  CogDbSsl:
+    Description: Require SSL for database connection
+    Type: String
+    Default: "false"
+    AllowedValues:
+    - "false"
+    - "true"
+  CogBootstrapInstance:
+    Description: Configure Cog admin user automatically with bootstrap settings or manually via cogctl
+    Type: String
+    Default: automatic
+    AllowedValues:
+    - automatic
+    - cogctl
+  CogBootstrapUsername:
+    Description: "COG_BOOTSTRAP_USERNAME: Username for initial Cog administrator"
+    Type: String
+    Default: admin
+  CogBootstrapPassword:
+    Description: "COG_BOOTSTRAP_PASSWORD: Password for initial Cog administrator"
+    Type: String
+    Default: changeme
+  CogBootstrapFirstName:
+    Description: "COG_BOOTSTRAP_FIRST_NAME: First name for initial Cog administrator"
+    Type: String
+    Default: Cog
+  CogBootstrapLastName:
+    Description: "COG_BOOTSTRAP_LAST_NAME: Last name for initial Cog administrator"
+    Type: String
+    Default: Administrator
+  CogBootstrapEmailAddress:
+    Description: "COG_BOOTSTRAP_EMAIL_ADDRESS: Email address for initial Cog administrator"
+    Type: String
+    Default: cog@example.com
+  CogAllowSelfRegistration:
+    Description: "COG_ALLOW_SELF_REGISTRATION: Allow users to register themselves with Cog"
+    Type: String
+    Default: "false"
+    AllowedValues:
+    - "false"
+    - "true"
+Conditions:
+  CogBucketNameEmpty: !Equals [!Ref CogBucketName, ""]
+  CogBucketNameExists: !Not [!Equals [!Ref CogBucketName, ""]]
+  CogDnsnameExists: !Not [!Equals [!Ref CogDnsname, ""]]
+  SslEnabled: !Not [!Equals [!Ref SslCertificateArn, ""]]
+  SslDisabled: !Equals [!Ref SslCertificateArn, ""]
+  CogImageEmpty: !Equals [!Ref CogImage, ""]
+  SlackApiTokenEmpty: !Equals [!Ref SlackApiToken, ""]
+  RelayImageEmpty: !Equals [!Ref RelayImage, ""]
+  RelayIdEmpty: !Equals [!Ref RelayId, ""]
+  RelayCogTokenEmpty: !Equals [!Ref RelayCogToken, ""]
+  DatabaseUrlExists: !Not [!Equals [!Ref DatabaseUrl, ""]]
+  CogRdsEnabled: !Equals [!Ref DatabaseSource, "RDS"]
+  CogBootstrapInstance: !Equals [!Ref CogBootstrapInstance, automatic]
+  CogBootstrapUsernameEmpty: !Equals [!Ref CogBootstrapUsername, ""]
+  CogBootstrapPasswordEmpty: !Equals [!Ref CogBootstrapPassword, ""]
+  CogBootstrapFirstNameEmpty: !Equals [!Ref CogBootstrapFirstName, ""]
+  CogBootstrapLastNameEmpty: !Equals [!Ref CogBootstrapLastName, ""]
+  CogBootstrapEmailAddressEmpty: !Equals [!Ref CogBootstrapEmailAddress, ""]
+  CogAllowSelfRegistration: !Equals [!Ref CogAllowSelfRegistration, ""]
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+    - Label:
+        default: AWS Global Configuration
+      Parameters:
+      - VpcId
+      - ElbSubnetIds
+      - InstanceSubnetIds
+      - CogBucketName
+      - CogBucketPrefix
+      - KeyName
+      - InstanceType
+      - ImageId
+    - Label:
+        default: HTTP Configuration
+      Parameters:
+      - CogDnsname
+      - SslCertificateArn
+    - Label:
+        default: "Database Source"
+      Parameters:
+      - DatabaseSource
+    - Label:
+        default: "Database Configuration (RDS)"
+      Parameters:
+      - CogRdsDatabaseUrlExport
+      - CogRdsSecurityGroupExport
+    - Label:
+        default: "Database Configuration (URL)"
+      Parameters:
+      - DatabaseUrl
+      - CogDbSsl
+    - Label:
+        default: Cog Config (Required)
+      Parameters:
+      - CogImage
+      - SlackApiToken
+      - RelayImage
+      - RelayId
+      - RelayCogToken
+    - Label:
+        default: Cog Config (Bootstrap)
+      Parameters:
+      - CogBootstrapInstance
+      - CogBootstrapUsername
+      - CogBootstrapPassword
+      - CogBootstrapFirstName
+      - CogBootstrapLastName
+      - CogBootstrapEmailAddress
+    - Label:
+        default: Cog Config (Frequently Updated)
+      Parameters:
+      - CogAllowSelfRegistration
+    ParameterLabels:
+      VpcId:
+        default: "* VPC ID"
+      ElbSubnetIds:
+        default: "* ELB Subnet IDs"
+      InstanceSubnetIds:
+        default: "* Instance Subnet IDs"
+      CogBucketName:
+        default: S3 Bucket
+      CogBucketPrefix:
+        default: S3 Prefix
+      KeyName:
+        default: "* EC2 SSH Keypair"
+      InstanceType:
+        default: "* EC2 Instance Type"
+      ImageId:
+        default: "* EC2 AMI"
+      CogDnsname:
+        default: DNS Hostname
+      SslCertificateArn:
+        default: SSL Certificate
+      CogImage:
+        default: "* Cog Docker Image"
+      SlackApiToken:
+        default: "* Slack API Token"
+      RelayImage:
+        default: "* Relay Docker Image"
+      RelayId:
+        default: "* Relay UUID"
+      RelayCogToken:
+        default: "* Relay Secret"
+      DatabaseSource:
+        default: "* Database Source"
+      CogRdsDatabaseUrlExport:
+        default: "Databse URL Export"
+      CogRdsSecurityGroupExport:
+        default: "Security Group Export"
+      DatabaseUrl:
+        default: "Database URL"
+      CogDbSsl:
+        default: Use SSL
+      CogBootstrapInstance:
+        default: "* Bootstrap Method"
+      CogAllowSelfRegistration:
+        default: "* Self Registration"
+      CogBootstrapUsername:
+        default: Username
+      CogBootstrapPassword:
+        default: Password
+      CogBootstrapFirstName:
+        default: First Name
+      CogBootstrapLastName:
+        default: Last Name
+      CogBootstrapEmailAddress:
+        default: Email Address
+Resources:
+  Time:
+    Type: Custom::TimestampFunction
+    Properties:
+      ServiceToken: !GetAtt [TimestampFunction, Arn]
+      ParamData:
+      - !Ref ImageId
+      - !Ref InstanceSubnetIds
+      - !Ref InstanceType
+      - !Ref KeyName
+      - !Ref CogDnsname
+      - !Ref CogImage
+      - !Ref RelayImage
+      - !Ref DatabaseSource
+      - !Ref CogRdsDatabaseUrlExport
+      - !Ref CogRdsSecurityGroupExport
+      - !Ref DatabaseUrl
+      - !Ref CogDbSsl
+      - !Ref SlackApiToken
+      - !Ref CogAllowSelfRegistration
+      - !Ref CogBootstrapEmailAddress
+      - !Ref CogBootstrapFirstName
+      - !Ref CogBootstrapInstance
+      - !Ref CogBootstrapLastName
+      - !Ref CogBootstrapPassword
+      - !Ref CogBootstrapUsername
+      - !Ref CogBucketName
+      - !Ref CogBucketPrefix
+      - !Ref RelayId
+      - !Ref RelayCogToken
+  TimestampFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Code:
+        ZipFile: |
+          var response = require("cfn-response");
+          exports.handler = function(event, context) {
+              console.log(JSON.stringify(event));
+              response.send(event, context, "SUCCESS", { "Now": Date.now() })
+          };
+      Handler: index.handler
+      Role: !GetAtt [LambdaLogRole, Arn]
+      Runtime: nodejs
+      Timeout: 3
+  LambdaLogRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service:
+            - lambda.amazonaws.com
+          Action:
+          - sts:AssumeRole
+      Path: "/"
+      Policies:
+      - PolicyName: root
+        PolicyDocument:
+          Version: "2012-10-17"
+          Statement:
+          - Effect: Allow
+            Action:
+            - logs:CreateLogGroup
+            - logs:CreateLogStream
+            - logs:PutLogEvents
+            Resource: arn:aws:logs:*:*:*
+  CogBucket:
+    Type: AWS::S3::Bucket
+    Condition: CogBucketNameEmpty
+  CogElbSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Cog Load Balancer
+      VpcId: !Ref VpcId
+      Tags:
+      - Key: Name
+        Value: cog-elb
+  CogElbEgressAny:
+    Type: AWS::EC2::SecurityGroupEgress
+    Properties:
+      GroupId: !Ref CogElbSecurityGroup
+      FromPort: -1
+      ToPort: -1
+      IpProtocol: -1
+      CidrIp: 0.0.0.0/0
+  CogElbIngressICMP:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref CogElbSecurityGroup
+      FromPort: -1
+      ToPort: -1
+      IpProtocol: 1
+      CidrIp: 0.0.0.0/0
+  CogElbIngressAPI:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref CogElbSecurityGroup
+      FromPort: !If [SslEnabled, 443, 80]
+      ToPort: !If [SslEnabled, 443, 80]
+      IpProtocol: 6
+      CidrIp: 0.0.0.0/0
+  CogElbIngressTriggers:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref CogElbSecurityGroup
+      FromPort: 4001
+      ToPort: 4001
+      IpProtocol: 6
+      CidrIp: 0.0.0.0/0
+  CogElbIngressServices:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref CogElbSecurityGroup
+      FromPort: 4002
+      ToPort: 4002
+      IpProtocol: 6
+      CidrIp: 0.0.0.0/0
+  CogElbV2:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: cog
+      SecurityGroups:
+      - !Ref CogElbSecurityGroup
+      Subnets: !Ref ElbSubnetIds
+      Tags:
+      - Key: Name
+        Value: cog
+  CogElbApiTarget:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: CogApiEndpoint
+      VpcId: !Ref VpcId
+      Protocol: HTTP
+      Port: 4000
+      HealthCheckPort: 4000
+      HealthCheckPath: "/v1/bootstrap"
+      HealthyThresholdCount: 3
+      UnhealthyThresholdCount: 6
+      HealthCheckTimeoutSeconds: 5
+      HealthCheckIntervalSeconds: 10
+  CogElbApiListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref CogElbV2
+      Port: !If [SslEnabled, "443", "80"]
+      Protocol: !If [SslEnabled, HTTPS, HTTP]
+      Certificates: !If [SslEnabled, [{CertificateArn: !Ref SslCertificateArn}], !Ref "AWS::NoValue"]
+      DefaultActions:
+      - Type: forward
+        TargetGroupArn: !Ref CogElbApiTarget
+  CogElbTriggerTarget:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: CogTriggerEndpoint
+      VpcId: !Ref VpcId
+      Protocol: HTTP
+      Port: 4001
+      HealthCheckPort: 4000
+      HealthCheckPath: "/v1/bootstrap"
+      HealthyThresholdCount: 3
+      UnhealthyThresholdCount: 6
+      HealthCheckTimeoutSeconds: 5
+      HealthCheckIntervalSeconds: 10
+  CogElbTriggerListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref CogElbV2
+      Port: 4001
+      Protocol: !If [SslEnabled, HTTPS, HTTP]
+      Certificates: !If [SslEnabled, [{CertificateArn: !Ref SslCertificateArn}], !Ref "AWS::NoValue"]
+      DefaultActions:
+      - Type: forward
+        TargetGroupArn: !Ref CogElbTriggerTarget
+  CogElbServiceTarget:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: CogServiceEndpoint
+      VpcId: !Ref VpcId
+      Protocol: HTTP
+      Port: 4002
+      HealthCheckPort: 4000
+      HealthCheckPath: "/v1/bootstrap"
+      HealthyThresholdCount: 3
+      UnhealthyThresholdCount: 6
+      HealthCheckTimeoutSeconds: 5
+      HealthCheckIntervalSeconds: 10
+  CogElbServiceListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref CogElbV2
+      Port: 4002
+      Protocol: !If [SslEnabled, HTTPS, HTTP]
+      Certificates: !If [SslEnabled, [{CertificateArn: !Ref SslCertificateArn}], !Ref "AWS::NoValue"]
+      DefaultActions:
+      - Type: forward
+        TargetGroupArn: !Ref CogElbServiceTarget
+  CogInstanceSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Cog Security Group
+      VpcId: !Ref VpcId
+      Tags:
+      - Key: Name
+        Value: cog-instance
+  CogInstanceEgressAny:
+    Type: AWS::EC2::SecurityGroupEgress
+    Properties:
+      GroupId: !Ref CogInstanceSecurityGroup
+      FromPort: -1
+      ToPort: -1
+      IpProtocol: -1
+      CidrIp: 0.0.0.0/0
+  CogInstanceIngressICMP:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref CogInstanceSecurityGroup
+      FromPort: -1
+      ToPort: -1
+      IpProtocol: 1
+      CidrIp: 0.0.0.0/0
+  CogInstanceIngressSSH:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref CogInstanceSecurityGroup
+      FromPort: 22
+      ToPort: 22
+      IpProtocol: 6
+      CidrIp: 0.0.0.0/0
+  CogInstanceIngressAPIs:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref CogInstanceSecurityGroup
+      FromPort: 4000
+      ToPort: 4002
+      IpProtocol: 6
+      SourceSecurityGroupId: !Ref CogElbSecurityGroup
+  CogInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Path: "/cog/"
+      Roles:
+      - !Ref CogInstanceRole
+  CogInstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service:
+            - ec2.amazonaws.com
+          Action:
+          - sts:AssumeRole
+      Path: "/cog/"
+  CogInstancePolicyS3:
+    Type: AWS::IAM::Policy
+    Properties:
+      Roles:
+      - !Ref CogInstanceRole
+      PolicyName: CogInstancePolicyS3
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+        - Effect: Allow
+          Action:
+          - s3:ListBucket
+          Resource:
+          - !Sub
+            - "arn:aws:s3:::${bucket}${CogBucketPrefix}"
+            - { bucket: !If [CogBucketNameExists, !Ref CogBucketName, !Ref CogBucket] }
+          - !Sub
+            - "arn:aws:s3:::${bucket}${CogBucketPrefix}*"
+            - { bucket: !If [CogBucketNameExists, !Ref CogBucketName, !Ref CogBucket] }
+        - Effect: Allow
+          Action:
+          - s3:PutObject
+          - s3:GetObject
+          Resource:
+          - !Sub
+            - "arn:aws:s3:::${bucket}${CogBucketPrefix}*"
+            - { bucket: !If [CogBucketNameExists, !Ref CogBucketName, !Ref CogBucket] }
+  CogAsg:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      VPCZoneIdentifier: !Ref InstanceSubnetIds
+      DesiredCapacity: 1
+      MaxSize: 1
+      MinSize: 0
+      HealthCheckType: EC2
+      HealthCheckGracePeriod: 300
+      LaunchConfigurationName: !Ref CogAsgLaunchConfig
+      TargetGroupARNs:
+      - !Ref CogElbApiTarget
+      - !Ref CogElbTriggerTarget
+      - !Ref CogElbServiceTarget
+      Tags:
+      -
+        Key: Name
+        Value: !Ref "AWS::StackName"
+        PropagateAtLaunch: true
+    UpdatePolicy:
+      AutoScalingReplacingUpdate:
+        WillReplace: "true"
+  CogAsgLaunchConfig:
+    Type: AWS::AutoScaling::LaunchConfiguration
+    Properties:
+      AssociatePublicIpAddress: true
+      IamInstanceProfile: !Ref CogInstanceProfile
+      ImageId: !Ref ImageId
+      KeyName: !Ref KeyName
+      InstanceType: !Ref InstanceType
+      SecurityGroups:
+      - !Ref CogInstanceSecurityGroup
+      UserData:
+        Fn::Base64:
+          !Sub
+            - |
+              #cloud-config
+              apt_upgrade: true
+              apt_sources:
+                - source: deb https://apt.dockerproject.org/repo ubuntu-xenial main
+                  keyserver: hkp://p80.pool.sks-keyservers.net:80
+                  keyid: 58118E89F3A912897C070ADBF76221572C52609D
+              packages:
+                - apt-transport-https
+                - ca-certificates
+                - python-setuptools
+                - linux-image-extra-virtual
+                - awscli
+              runcmd:
+                - [ apt-get, install, "-y", docker-engine ]
+                - [ easy_install, "https://s3.amazonaws.com/cloudformation-examples/aws-cfn-bootstrap-latest.tar.gz" ]
+                - [ easy_install, docker-compose ]
+                - [ service, docker, start ]
+                - [ cfn-init, "-s", "${StackName}", "-r", CogAsgLaunchConfig ]
+                - [ echo, "Template Update Timestamp: ${Time.Now}" ]
+            - {StackName: !Ref "AWS::StackName"}
+    Metadata:
+      AWS::CloudFormation::Init:
+        configSets:
+          default:
+          - setup_paths
+          - configure
+          - run
+        setup_paths:
+          commands:
+            create_cog_home:
+              command: mkdir -m 0700 -p /opt/cog
+        configure:
+          files:
+            "/opt/cog/.env":
+              content:
+                !Sub
+                  - |
+                    COG_IMAGE=${CogImage}
+                    SLACK_API_TOKEN=${SlackApiToken}
+                    DATABASE_URL=${CogDatabaseUrl}
+                    COG_DB_SSL=${CogDbSsl}
+                    COG_ALLOW_SELF_REGISTRATION=${CogAllowSelfRegistration}
+                    COG_API_URL_BASE=${CogApiUrlBase}
+                    COG_TRIGGER_URL_BASE=${CogTriggerUrlBase}
+                    COG_SERVICE_URL_BASE=${CogServiceUrlBase}
+                    RELAY_ID=${RelayId}
+                    RELAY_IMAGE=${RelayImage}
+                    RELAY_COG_TOKEN=${RelayCogToken}
+                    ${BootstrapVars}
+                  -
+                    CogDatabaseUrl: !If
+                      - CogRdsEnabled
+                      - !ImportValue { "Ref": "CogRdsDatabaseUrlExport" }
+                      - !Ref DatabaseUrl
+                    BootstrapVars: !If
+                      - CogBootstrapInstance
+                      - !Sub |
+                        COG_BOOTSTRAP_EMAIL_ADDRESS=${CogBootstrapEmailAddress}
+                        COG_BOOTSTRAP_FIRST_NAME=${CogBootstrapFirstName}
+                        COG_BOOTSTRAP_LAST_NAME=${CogBootstrapLastName}
+                        COG_BOOTSTRAP_PASSWORD=${CogBootstrapPassword}
+                        COG_BOOTSTRAP_USERNAME=${CogBootstrapUsername}
+                      - "BOOTSTRAP=false"
+                    CogApiUrlBase: !Sub
+                      - "${scheme}://${hostname}:${port}"
+                      -
+                        scheme: !If [SslEnabled, https, http]
+                        hostname: !If [CogDnsnameExists, !Ref CogDnsname, !GetAtt [CogElbV2, DNSName]]
+                        port: !If [SslEnabled, 443, 80]
+                    CogTriggerUrlBase: !Sub
+                      - "${scheme}://${hostname}:${port}"
+                      -
+                        scheme: !If [SslEnabled, https, http]
+                        hostname: !If [CogDnsnameExists, !Ref CogDnsname, !GetAtt [CogElbV2, DNSName]]
+                        port: "4001"
+                    CogServiceUrlBase: !Sub
+                      - "${scheme}://${hostname}:${port}"
+                      -
+                        scheme: !If [SslEnabled, https, http]
+                        hostname: !If [CogDnsnameExists, !Ref CogDnsname, !GetAtt [CogElbV2, DNSName]]
+                        port: "4002"
+              mode: "0600"
+              owner: root
+              group: root
+            "/opt/cog/docker-compose.yml":
+              content: |
+                version: "2"
+                services:
+                  cog:
+                    image: "${COG_IMAGE}"
+                    environment:
+                      - COG_MQTT_HOST=0.0.0.0
+                      - DATABASE_URL=${DATABASE_URL}
+                      - COG_DB_SSL=${COG_DB_SSL}
+                      - SLACK_API_TOKEN=${SLACK_API_TOKEN}
+                      - COG_BOOTSTRAP_USERNAME=${COG_BOOTSTRAP_USERNAME}
+                      - COG_BOOTSTRAP_PASSWORD=${COG_BOOTSTRAP_PASSWORD}
+                      - COG_BOOTSTRAP_EMAIL_ADDRESS=${COG_BOOTSTRAP_EMAIL_ADDRESS}
+                      - COG_BOOTSTRAP_FIRST_NAME=${COG_BOOTSTRAP_FIRST_NAME}
+                      - COG_BOOTSTRAP_LAST_NAME=${COG_BOOTSTRAP_LAST_NAME}
+                      - COG_API_URL_BASE=${COG_API_URL_BASE}
+                      - COG_TRIGGER_URL_BASE=${COG_TRIGGER_URL_BASE}
+                      - COG_SERVICE_URL_BASE=${COG_SERVICE_URL_BASE}
+                      - RELAY_ID=${RELAY_ID}
+                      - RELAY_COG_TOKEN=${RELAY_COG_TOKEN}
+                      - COG_ALLOW_SELF_REGISTRATION=${COG_ALLOW_SELF_REGISTRATION}
+                    ports:
+                      - 1883:1883
+                      - 4000:4000
+                      - 4001:4001
+                      - 4002:4002
+                    restart: always
+                    entrypoint: /home/operable/cog/scripts/docker-start
+                  relay:
+                    image: "${RELAY_IMAGE}"
+                    privileged: true
+                    volumes:
+                      - /var/run/docker.sock:/var/run/docker.sock
+                    environment:
+                      - RELAY_ID=${RELAY_ID}
+                      - RELAY_COG_TOKEN=${RELAY_COG_TOKEN}
+                      - RELAY_COG_REFRESH_INTERVAL=30s
+                      - RELAY_DOCKER_CLEAN_INTERVAL=1m
+                      - RELAY_COG_HOST=cog
+                      - RELAY_MANAGED_DYNAMIC_CONFIG=true
+                      - RELAY_DYNAMIC_CONFIG_ROOT=/tmp/bundle_configs
+                    links:
+                      - cog
+                    restart: always
+                    entrypoint: /usr/local/bin/relay
+              mode: "0600"
+              owner: root
+              group: root
+          commands:
+            copy_s3_resources:
+              command: !Sub
+                - "aws s3 cp --recursive s3://${bucket}${CogBucketPrefix}etc /opt/cog || true"
+                - { bucket: !If [CogBucketNameExists, !Ref CogBucketName, !Ref CogBucket] }
+        run:
+          commands:
+            docker_start:
+              command: "/usr/local/bin/docker-compose up -d"
+              cwd: "/opt/cog"
+  RdsIngressPg:
+    Type: AWS::EC2::SecurityGroupIngress
+    Condition: CogRdsEnabled
+    Properties:
+      GroupId: !ImportValue { "Ref": "CogRdsSecurityGroupExport" }
+      FromPort: 5432
+      ToPort: 5432
+      IpProtocol: 6
+      SourceSecurityGroupId: !Ref CogInstanceSecurityGroup
+Outputs:
+  CogBucket:
+    Value: !If [CogBucketNameExists, !Ref CogBucketName, !Ref CogBucket]
+  CogElbHostname:
+    Value: !GetAtt [CogElbV2, DNSName]
+  CogSecurityGroup:
+    Value: !GetAtt [CogInstanceSecurityGroup, GroupId]
+  CogInstanceRole:
+    Value: !GetAtt [CogInstanceRole, Arn]
