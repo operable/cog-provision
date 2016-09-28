@@ -247,7 +247,7 @@ Metadata:
       Parameters:
       - CogAllowSelfRegistration
     - Label:
-        default: Cog Config (Password Reset / SMTP Settings)
+        default: Cog Config (Forgotten Password SMTP Setup)
       Parameters:
       - CogSmtpServer
       - CogSmtpPort
