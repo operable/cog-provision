@@ -3,7 +3,7 @@
 This repository contains supporting tools and artifacts for provisioning and
 managing the infrastructure to support a Cog installation.
 
-## AWS CloudFormation
+## [AWS CloudFormation](https://github.com/operable/cog-provision/tree/master/cloudformation)
 
 **Features:**
 * Cog Host: EC2 Instance
