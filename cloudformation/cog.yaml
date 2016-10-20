@@ -683,6 +683,7 @@ Resources:
                 !Sub
                   - |
                     COG_IMAGE=${CogImage}
+                    COG_SLACK_ENABLED=true
                     SLACK_API_TOKEN=${SlackApiToken}
                     DATABASE_URL=${CogDatabaseUrl}
                     COG_DB_SSL=${CogDbSsl}
