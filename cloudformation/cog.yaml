@@ -403,7 +403,7 @@ Resources:
       VpcId: !Ref VpcId
       Tags:
       - Key: Name
-        Value: cog-elb
+        Value: !Ref "AWS::StackName"
   CogElbEgressAny:
     Type: AWS::EC2::SecurityGroupEgress
     Properties:
@@ -453,7 +453,7 @@ Resources:
       Subnets: !Ref ElbSubnetIds
       Tags:
       - Key: Name
-        Value: cog
+        Value: !Ref "AWS::StackName"
   CogElbApiTarget:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
@@ -530,7 +530,7 @@ Resources:
       VpcId: !Ref VpcId
       Tags:
       - Key: Name
-        Value: cog-instance
+        Value: !Ref "AWS::StackName"
   CogInstanceEgressAny:
     Type: AWS::EC2::SecurityGroupEgress
     Properties:
