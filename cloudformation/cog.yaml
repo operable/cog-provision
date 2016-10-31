@@ -46,7 +46,7 @@ Parameters:
   ImageId:
     Description: Cog Host AMI
     Type: String
-    Default: ami-fd6e3bea
+    Default: ami-40d28157
     ConstraintDescription: must be an Ubuntu 16.04 LTS HVM/EBS AMI
   CogDnsname:
     Description: DNS hostname to use for Cog APIs - defaults to ELB DNS name if not set
