@@ -149,6 +149,10 @@ Parameters:
     AllowedValues:
     - "false"
     - "true"
+  CogEmailFrom:
+    Description: "COG_EMAIL_FROM: From address for outbound email"
+    Type: String
+    Default: ""
   CogSmtpServer:
     Description: "COG_SMTP_SERVER: SMTP server hostname"
     Type: String
@@ -250,6 +254,7 @@ Metadata:
     - Label:
         default: Cog Config (Forgotten Password SMTP Setup)
       Parameters:
+      - CogEmailFrom
       - CogSmtpServer
       - CogSmtpPort
       - CogSmtpUsername
@@ -310,6 +315,8 @@ Metadata:
         default: Last Name
       CogBootstrapEmailAddress:
         default: Email Address
+      CogEmailFrom:
+        default: From Address
       CogSmtpServer:
         default: Hostname
       CogSmtpPort:
@@ -702,6 +709,7 @@ Resources:
                     RELAY_ID=${RelayId}
                     RELAY_IMAGE=${RelayImage}
                     RELAY_COG_TOKEN=${RelayCogToken}
+                    COG_EMAIL_FROM=${CogEmailFrom}
                     COG_SMTP_SERVER=${CogSmtpServer}
                     COG_SMTP_PORT=${CogSmtpPort}
                     COG_SMTP_USERNAME=${CogSmtpUsername}
@@ -763,6 +771,12 @@ Resources:
                       - COG_API_URL_BASE=${COG_API_URL_BASE}
                       - COG_TRIGGER_URL_BASE=${COG_TRIGGER_URL_BASE}
                       - COG_SERVICE_URL_BASE=${COG_SERVICE_URL_BASE}
+                      - COG_EMAIL_FROM=${COG_EMAIL_FROM}
+                      - COG_SMTP_SERVER=${COG_SMTP_SERVER}
+                      - COG_SMTP_PORT=${COG_SMTP_PORT}
+                      - COG_SMTP_USERNAME=${COG_SMTP_USERNAME}
+                      - COG_SMTP_PASSWORD=${COG_SMTP_PASSWORD}
+                      - COG_SMTP_SSL=${COG_SMTP_SSL}
                       - RELAY_ID=${RELAY_ID}
                       - RELAY_COG_TOKEN=${RELAY_COG_TOKEN}
                       - COG_ALLOW_SELF_REGISTRATION=${COG_ALLOW_SELF_REGISTRATION}
