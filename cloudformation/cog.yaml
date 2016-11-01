@@ -447,7 +447,7 @@ Resources:
   CogElbV2:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
-      Name: cog
+      Name: !Ref "AWS::StackName"
       SecurityGroups:
       - !Ref CogElbSecurityGroup
       Subnets: !Ref ElbSubnetIds
@@ -457,7 +457,10 @@ Resources:
   CogElbApiTarget:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
-      Name: CogApiEndpoint
+      Name:
+        "Fn::Join":
+        - "-"
+        - [!Ref "AWS::StackName", ApiEndpoint]
       VpcId: !Ref VpcId
       Protocol: HTTP
       Port: 4000
@@ -480,7 +483,10 @@ Resources:
   CogElbTriggerTarget:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
-      Name: CogTriggerEndpoint
+      Name:
+        "Fn::Join":
+        - "-"
+        - [!Ref "AWS::StackName", TriggerEndpoint]
       VpcId: !Ref VpcId
       Protocol: HTTP
       Port: 4001
@@ -503,7 +509,10 @@ Resources:
   CogElbServiceTarget:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
-      Name: CogServiceEndpoint
+      Name:
+        "Fn::Join":
+        - "-"
+        - [!Ref "AWS::StackName", ServiceEndpoint]
       VpcId: !Ref VpcId
       Protocol: HTTP
       Port: 4002
@@ -683,7 +692,6 @@ Resources:
                 !Sub
                   - |
                     COG_IMAGE=${CogImage}
-                    COG_SLACK_ENABLED=true
                     SLACK_API_TOKEN=${SlackApiToken}
                     DATABASE_URL=${CogDatabaseUrl}
                     COG_DB_SSL=${CogDbSsl}
@@ -745,6 +753,7 @@ Resources:
                       - COG_MQTT_HOST=0.0.0.0
                       - DATABASE_URL=${DATABASE_URL}
                       - COG_DB_SSL=${COG_DB_SSL}
+                      - COG_SLACK_ENABLED=true
                       - SLACK_API_TOKEN=${SLACK_API_TOKEN}
                       - COG_BOOTSTRAP_USERNAME=${COG_BOOTSTRAP_USERNAME}
                       - COG_BOOTSTRAP_PASSWORD=${COG_BOOTSTRAP_PASSWORD}
