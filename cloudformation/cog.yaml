@@ -62,7 +62,7 @@ Parameters:
     MinLength: "1"
     Description: "COG_IMAGE: Cog Docker Image"
     Type: String
-    Default: operable/cog:0.15.2
+    Default: operable/cog:0.16.1
   SlackApiToken:
     NoEcho: "true"
     Description: "SLACK_API_TOKEN: Slack API token"
@@ -72,7 +72,7 @@ Parameters:
     MinLength: "1"
     Description: "RELAY_IMAGE: Relay Docker Image"
     Type: String
-    Default: operable/relay:0.15.2
+    Default: operable/relay:0.16.1
   RelayId:
     Description: "RELAY_ID: UUID for Relay"
     Type: String
