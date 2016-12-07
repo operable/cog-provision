@@ -46,7 +46,7 @@ Parameters:
   ImageId:
     Description: Cog Host AMI
     Type: String
-    Default: ami-40d28157
+    Default: ami-e6d5d2f1
     ConstraintDescription: must be an Ubuntu 16.04 LTS HVM/EBS AMI
   CogDnsname:
     Description: DNS hostname to use for Cog APIs - defaults to ELB DNS name if not set
@@ -62,7 +62,7 @@ Parameters:
     MinLength: "1"
     Description: "COG_IMAGE: Cog Docker Image"
     Type: String
-    Default: operable/cog:0.16.1
+    Default: operable/cog:0.16.2
   SlackApiToken:
     NoEcho: "true"
     Description: "SLACK_API_TOKEN: Slack API token"
