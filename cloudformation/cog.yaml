@@ -676,7 +676,8 @@ Resources:
               runcmd:
                 - [ apt-get, install, "-y", docker-engine ]
                 - [ easy_install, "https://s3.amazonaws.com/cloudformation-examples/aws-cfn-bootstrap-latest.tar.gz" ]
-                - [ easy_install, docker-compose ]
+                - [ easy_install, pip ]
+                - [ pip, install, docker-compose ]
                 - [ service, docker, start ]
                 - [ cfn-init, "-s", "${StackName}", "-r", CogAsgLaunchConfig ]
                 - [ echo, "Template Update Timestamp: ${Time.Now}" ]
