@@ -679,7 +679,7 @@ Resources:
                 - [ easy_install, pip ]
                 - [ pip, install, docker-compose ]
                 - [ service, docker, start ]
-                - [ cfn-init, "-s", "${StackName}", "-r", CogAsgLaunchConfig ]
+                - [ cfn-init, "--region", "${AWS::Region}", "-s", "${StackName}", "-r", CogAsgLaunchConfig ]
                 - [ echo, "Template Update Timestamp: ${Time.Now}" ]
             - {StackName: !Ref "AWS::StackName"}
     Metadata:
