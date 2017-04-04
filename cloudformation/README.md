@@ -12,7 +12,7 @@ instance in Amazon Web Services.
 More detailed explanations are available in the Cog Core Components and Cog RDS
 Database sections below.
 
-## Cog Core Components: [cog.yaml](https://github.com/operable/cog-provision/blob/master/cfn-yaml/cloudformation/cog.yaml)
+## Cog Core Components: [cog.yaml](cog.yaml)
 
 This template provides a Cog and Relay instance running within Docker on an
 EC2 instance. The EC2 instance is managed by an auto-scaling group that
@@ -72,7 +72,7 @@ For example, if your `CogBucketName` was set to *MyBucket* and your
 `CogBucketPrefix` was set to */cog/*, you'd upload the override file to:
 `s3://MyBucket/cog/etc/docker-compose.override.yml`.
 
-## Cog RDS Database: [cog-rds.yaml](https://github.com/operable/cog-provision/blob/master/cloudformation/cog-rds.yaml)
+## Cog RDS Database: [cog-rds.yaml](cog-rds.yaml)
 
 This template can be used to supply the Postgres database that is required for
 Cog with optional multi-az replication for high availability.
