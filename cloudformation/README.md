@@ -72,7 +72,7 @@ For example, if your `CogBucketName` was set to *MyBucket* and your
 `CogBucketPrefix` was set to */cog/*, you'd upload the override file to:
 `s3://MyBucket/cog/etc/docker-compose.override.yml`.
 
-## Cog RDS Database: [cog-rds.yaml](https://github.com/operable/cog-provision/blob/master/cfn-yaml/cloudformation/cog-rds.yaml)
+## Cog RDS Database: [cog-rds.yaml](https://github.com/operable/cog-provision/blob/master/cloudformation/cog-rds.yaml)
 
 This template can be used to supply the Postgres database that is required for
 Cog with optional multi-az replication for high availability.
